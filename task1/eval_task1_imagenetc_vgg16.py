@@ -224,9 +224,13 @@ def main():
             top1_restored = 0.0
             top5_restored = 0.0
 
+            psnr_accum = 0.0
+            ssim_accum = 0.0
+
             with torch.no_grad():
-                for img, label in loader:
+                for img, clean_img, label in loader:
                     img = img.to(device)
+                    clean_img = clean_img.to(device)
                     label = label.to(device)
 
                     # 1. Inference Restormer
@@ -235,6 +239,11 @@ def main():
                     
                     # Clamp to [0,1] just in case
                     restored = torch.clamp(restored, 0, 1)
+
+                    # Calculate PSNR/SSIM
+                    batch_psnr, batch_ssim = batch_psnr_ssim(clean_img, restored)
+                    psnr_accum += batch_psnr * img.size(0)
+                    ssim_accum += batch_ssim * img.size(0)
 
                     # 2. Inference VGG (Original)
                     vgg_input = vgg_preprocess(img)

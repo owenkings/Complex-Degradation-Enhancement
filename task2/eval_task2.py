@@ -236,13 +236,38 @@ def main():
                 print(f"[{desc}] Accuracy: {acc:.2%}")
                 total_acc += acc
                 count += 1
+                
+                results_list.append({
+                    "corruption": corr,
+                    "severity": sev,
+                    "accuracy": acc,
+                    "correct": corr_correct,
+                    "total": corr_total
+                })
             else:
                  print(f"[{desc}] No samples found.")
                  
+    import json
+
     if count > 0:
-        print(f"\n[Summary] Average Accuracy: {total_acc / count:.2%}")
+        avg_acc = total_acc / count
+        print(f"\n[Summary] Average Accuracy: {avg_acc:.2%}")
     else:
         print("\n[Summary] No evaluations performed.")
+    
+    # Save results to JSON
+    save_path = PROJECT_ROOT / "task2" / "logs" / "task2_imagenetc_results.json"
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    payload = {
+        "dataset": "ImageNet-C" if args.dataset_type == "imagenet-c" else "CUB-C",
+        "enhancer_path": str(Path(args.enhancer_path).resolve()) if args.enhancer_path else "baseline",
+        "results": results_list
+    }
+    
+    with open(save_path, "w") as f:
+        json.dump(payload, f, indent=2)
+    print(f"[INFO] Results saved to {save_path}")
 
 if __name__ == "__main__":
     main()

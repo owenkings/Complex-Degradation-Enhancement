@@ -63,6 +63,22 @@ pip install causal_conv1d==1.6.0
 pip install mamba_ssm==2.3.0 --no-binary mamba_ssm --no-build-isolation
 ```
 
+### 3. 准备 Restormer
+请在项目根目录下克隆官方仓库：
+git clone https://github.com/swz30/Restormer
+
+#### 下载预训练权重
+Task 1 (Restormer) 需要加载预训练的去模糊模型权重。由于文件较大，未包含在代码库中，请手动下载。
+
+1.  **下载地址**：[Google Drive Link](https://drive.google.com/drive/folders/1czMyfRTQDX3j3ErByYeZ1PM4GVLbJeGK?usp=sharing)
+2.  **下载文件**：`motion_deblurring.pth`
+3.  **保存位置**：请将文件保存至以下路径：
+    ```text
+    /root/autodl-tmp/owen/task1/Restormer/Motion_Deblurring/pretrained_models/motion_deblurring.pth
+    ```
+    *(如果目录不存在，请手动创建)*
+
+
 ## 实验一：图像增强 (Task 1)
 
 **核心逻辑**：使用 Restormer 模型对降质图像进行“去噪/修复”，然后将修复后的图像输入标准的 VGG16 进行分类。
