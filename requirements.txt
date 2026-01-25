@@ -13,3 +13,5 @@ triton==3.6.0
 scipy==1.17.0
 pillow==10.3.0
 basicsr==1.4.2
+pandas>=2.0.0
+seaborn>=0.13.0

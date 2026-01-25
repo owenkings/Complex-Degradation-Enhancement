@@ -23,7 +23,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-root", type=str, default=str(PROJECT_ROOT / "data" / "CUB-C"))
     parser.add_argument("--corruption", type=str, default="all") # Train on all corruptions
-    parser.add_argument("--backend", type=str, default="mamba", choices=["mamba", "transformer"])
+    parser.add_argument("--backend", type=str, default="mamba", choices=["mamba"], help="Backend used for training (Task 2 forces mamba)")
     parser.add_argument("--epochs", type=int, default=20)
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--lr", type=float, default=1e-4)

@@ -8,7 +8,7 @@ try:
     MAMBA_AVAILABLE = True
 except (ImportError, OSError, AttributeError) as e:
     MAMBA_AVAILABLE = False
-    warnings.warn(f"Mamba library not available or broken ({e}). If you want to use Mamba backend, please install mamba-ssm.")
+    # Don't warn here, check in __init__
 
 class MambaBlock(nn.Module):
     def __init__(self, dim, d_state=16, backend="mamba"):
@@ -17,7 +17,10 @@ class MambaBlock(nn.Module):
         
         if backend == "mamba":
             if not MAMBA_AVAILABLE:
-                raise ImportError("Mamba backend requested but mamba_ssm not installed.")
+                raise ImportError(
+                    "Mamba backend requested but mamba_ssm not installed or failed to load. "
+                    "Please install it using: pip install mamba_ssm"
+                )
             self.norm = nn.LayerNorm(dim)
             self.mamba = Mamba(d_model=dim, d_state=d_state)
             # FFN is often useful after Mamba mixer
@@ -27,15 +30,7 @@ class MambaBlock(nn.Module):
                 nn.Linear(dim * 4, dim)
             )
         else:
-            # Fallback: Transformer Encoder Layer
-            self.block = nn.TransformerEncoderLayer(
-                d_model=dim, 
-                nhead=4, 
-                dim_feedforward=dim*4, 
-                dropout=0.1, 
-                activation='gelu',
-                batch_first=True
-            )
+            raise ValueError(f"Backend '{backend}' is not allowed for Task 2. You must use 'mamba'.")
 
     def forward(self, x):
         """
@@ -54,7 +49,8 @@ class MambaBlock(nn.Module):
             x = x + residual
             return x
         else:
-            return self.block(x)
+            # Should not be reached given strict check in __init__
+            raise ValueError(f"Backend {self.backend} not supported")
 
 class MambaFeatureEnhancer(nn.Module):
     def __init__(self, in_channels=128, d_state=16, n_layers=2, backend="mamba"):

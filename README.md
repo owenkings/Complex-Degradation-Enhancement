@@ -30,7 +30,8 @@
 ├── task3/                      # 实验三：特征解码 (Feature Decoder)
 │   ├── train_decoder.py        # 训练解码器
 │   ├── run_task3.py            # 联合推理脚本
-│   └── decoder.py              # 解码器模型定义
+│   ├── decoder.py              # 解码器模型定义
+│   └── compare_results.py      # 结果对比汇总脚本 (Task 1 vs Task 2)
 ├── utils/                      # 工具代码
 │   ├── dataset.py              # 数据集加载 (CubCTrainDataset)
 │   ├── seed_utils.py           # 随机种子固定
@@ -65,7 +66,7 @@ pip install mamba_ssm==2.3.0 --no-binary mamba_ssm --no-build-isolation
 
 ### 3. 准备 Restormer
 请在项目根目录下克隆官方仓库：
-git clone https://github.com/swz30/Restormer
+git clone https://github.com/swz30/Restormer.git
 
 #### 下载预训练权重
 Task 1 (Restormer) 需要加载预训练的去模糊模型权重。由于文件较大，未包含在代码库中，请手动下载。
@@ -74,7 +75,7 @@ Task 1 (Restormer) 需要加载预训练的去模糊模型权重。由于文件�
 2.  **下载文件**：`motion_deblurring.pth`
 3.  **保存位置**：请将文件保存至以下路径：
     ```text
-    /root/autodl-tmp/owen/task1/Restormer/Motion_Deblurring/pretrained_models/motion_deblurring.pth
+    ./Restormer/Motion_Deblurring/pretrained_models/motion_deblurring.pth
     ```
     *(如果目录不存在，请手动创建)*
 
@@ -125,7 +126,8 @@ Task 1 (Restormer) 需要加载预训练的去模糊模型权重。由于文件�
       --severities "1,2,3,4,5" \
       --save-json task1/logs/task1_imagenetc_results.json
     ```
-    *   `--save-json`: 将详细结果保存为 JSON 文件，包含每种降质类型的 Accuracy, PSNR, SSIM。
+    *   `--save-json`: **(必须)** 将详细结果保存为 JSON 文件，用于后续 Task 3 的对比分析。
+    *   输出包含每种降质类型的 Accuracy, PSNR, SSIM。
 
 *(可选) 在 CUB-C 验证集上评估 PSNR/SSIM：*
 ```bash
@@ -147,6 +149,7 @@ python task1/eval_task1_cubc_psnr.py --ckpt task1/checkpoints_task1_restormer/al
       --batch-size 32 \
       --save-dir task2/checkpoints
     ```
+    *   注意：Task 2 强制使用 Mamba 架构，代码中已锁定 backend。
 
 ### 2. 评估 (Evaluation)
 在 ImageNet-C 上评估特征增强后的分类准确率。
@@ -160,6 +163,7 @@ python task1/eval_task1_cubc_psnr.py --ckpt task1/checkpoints_task1_restormer/al
       --corruption "fog,motion_blur" \
       --severity "1,2,3,4,5"
     ```
+    *   **结果保存**：脚本会自动将评估结果保存至 `task2/logs/task2_imagenetc_results.json`，供后续对比分析使用。
 
 ## 实验三：基于VGG浅层表征空间的图像增强 (Task 3)
 
@@ -190,6 +194,21 @@ python task1/eval_task1_cubc_psnr.py --ckpt task1/checkpoints_task1_restormer/al
       --output-dir task3/results
     ```
     *   `--save-results`: 将保存 `降质 | 增强 | 清晰` 的对比图到 `task3/results`。
+
+### 3. 结果对比与汇总 (Comparison)
+汇总 Task 1 (Image Enhancement) 和 Task 2 (Feature Enhancement) 的评估结果，生成对比报表和图表。
+
+*   **前置条件**：需先完成 Task 1 和 Task 2 的评估步骤，并生成了对应的 JSON 结果文件。
+*   **指令**：
+    ```bash
+    python task3/compare_results.py \
+      --task1-json task1/logs/task1_imagenetc_results.json \
+      --task2-json task2/logs/task2_imagenetc_results.json \
+      --output-dir task3/comparison_results
+    ```
+*   **输出**：
+    *   `comparison_summary.csv`: 详细的指标对比表格。
+    *   `accuracy_comparison_bar.png`: 不同降质类型下的 Top-1 Accuracy 对比柱状图。
 
 ---
 

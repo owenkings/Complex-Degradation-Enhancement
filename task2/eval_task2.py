@@ -155,6 +155,7 @@ def main():
     synset_to_idx = load_synset_mapping(args.synset_mapping)
 
     # 3. Evaluation Loop
+    results_list = []
     total_acc = 0.0
     count = 0
     

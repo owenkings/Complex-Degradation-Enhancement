@@ -87,8 +87,8 @@ class ImageNetCDataset(Dataset):
         if clean_path.exists():
             clean_img = Image.open(clean_path).convert("RGB")
         else:
-            # Fallback if origin not found (e.g. if we are already in origin, or structure differs)
-            clean_img = img.copy()
+            # Strict mode: raise error if clean image is missing
+            raise FileNotFoundError(f"[ERROR] Clean image not found at {clean_path}. PSNR/SSIM calculation requires paired clean images.")
 
         if self.transform is not None:
             img = self.transform(img)
@@ -162,7 +162,7 @@ def parse_args():
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--top5", action="store_true")
-    parser.add_argument("--save-json", type=str, default=str(CURRENT_DIR / "logs" / "task1_imagenetc_vgg16.json"))
+    parser.add_argument("--save-json", type=str, default=str(CURRENT_DIR / "logs" / "task1_imagenetc_results.json"))
     parser.add_argument("--synset-mapping", type=str, default=str(PROJECT_ROOT / "data" / "ImageNet-C" / "synset_mapping.txt"))
     parser.add_argument("--max-samples", type=int, default=0)
     return parser.parse_args()
