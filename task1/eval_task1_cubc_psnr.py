@@ -13,6 +13,7 @@ sys.path.append(str(RESTORMER_DIR))
 import torch
 from torch.utils.data import DataLoader
 from torchvision import transforms
+from tqdm import tqdm
 
 from utils.dataset import CubCTrainDataset
 from utils.metrics import batch_psnr_ssim
@@ -106,8 +107,9 @@ def main():
             pin_memory=(device == "cuda"),
         )
         psnr_sum, ssim_sum, count = 0.0, 0.0, 0
+        pbar = tqdm(loader, desc=f"Eval {corruption}", leave=False, ncols=100)
         with torch.no_grad():
-            for degraded, clean, _ in loader:
+            for degraded, clean, _ in pbar:
                 degraded = degraded.to(device)
                 clean = clean.to(device)
                 restored = model(degraded).clamp(0.0, 1.0)

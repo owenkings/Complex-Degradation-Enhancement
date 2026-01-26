@@ -136,8 +136,9 @@ def main():
         top1_restored = 0.0
         top5_restored = 0.0
 
+        pbar = tqdm(loader, desc=f"Eval {corruption}", leave=False, ncols=100)
         with torch.no_grad():
-            for degraded, _, label in loader:
+            for degraded, _, label in pbar:
                 degraded = degraded.to(device)
                 label = label.to(device)
 

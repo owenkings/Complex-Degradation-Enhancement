@@ -98,78 +98,125 @@ class CubCTrainDataset(Dataset):
 
                 rel_path = id2relpath[img_id]
                 label = id2label[img_id]
-                base_samples.append((rel_path, label))
-
-        if len(base_samples) == 0:
-            raise RuntimeError(
-                f"No samples found for split='{self.split}' "
-                f"in {self.root}. Please check annotations/*.txt."
-            )
+                
+                # CubCTrainDataset 设计逻辑：
+                # root/corruption/rel_path
+                # 如果 corruption="origin", 则 root/origin/rel_path
+                
+                base_samples.append((img_id, rel_path, label))
+        
+        # 4) 生成最终 samples 列表：(degraded_path, clean_path, label)
         self.samples = []
-        for rel_path, label in base_samples:
+        for (img_id, rel_path, label) in base_samples:
+            clean_path = self.root / "origin" / rel_path
+            
+            # 如果 corruption 是 origin，则 degraded == clean
+            if "origin" in self.corruptions:
+                 self.samples.append((clean_path, clean_path, label))
+            
+            # 其他 corruptions
             for corr in self.corruptions:
-                self.samples.append((rel_path, label, corr))
+                if corr == "origin":
+                    continue
+                # CUB-C 是 root/corruption/rel_path
+                degraded_path = self.root / corr / rel_path
+                if degraded_path.exists():
+                    self.samples.append((degraded_path, clean_path, label))
+                else:
+                    # 某些图片可能没有对应的 corruption 版本或者路径不对
+                    pass
 
     def _normalize_corruptions(self, corruption):
-        allowed = ["fog", "contrast", "brightness", "motion_blur", "snow", "origin"]
-        if isinstance(corruption, str):
-            value = corruption.strip()
-            if value == "all":
-                return allowed  # Include origin for identity mapping learning
-            items = [c.strip() for c in value.split(",") if c.strip()]
-            if not items:
-                raise ValueError("Empty corruption list")
-            return items
-        if isinstance(corruption, (list, tuple, set)):
-            return list(corruption)
-        raise TypeError("corruption must be str, list, tuple, or set")
+        if corruption == "all":
+            return ["fog", "contrast", "brightness", "motion_blur", "snow"]
+        return [c.strip() for c in corruption.split(",")]
 
     def __len__(self):
         return len(self.samples)
 
     def __getitem__(self, idx):
-        rel_path, label, corruption = self.samples[idx]
+        degraded_path, clean_path, label = self.samples[idx]
+        
+        degraded_img = Image.open(degraded_path).convert("RGB")
+        clean_img = Image.open(clean_path).convert("RGB")
+        
+        if self.transform:
+            degraded_img = self.transform(degraded_img)
+            clean_img = self.transform(clean_img)
+            
+        return degraded_img, clean_img, label
 
-        # 干净图像
-        clean_path = self.root / "origin" / rel_path
-        # 降质图像（如果 corruption="origin"，那就是使用干净图本身）
-        degraded_root = self.root / corruption
-        degraded_path = degraded_root / rel_path
 
-        clean = Image.open(clean_path).convert("RGB")
-        degraded = Image.open(degraded_path).convert("RGB")
+class ImageNetCDataset(Dataset):
+    def __init__(self, root, corruption, severity, transform, synset_mapping, max_samples=0):
+        self.root = Path(root)
+        self.corruption = corruption
+        self.severity = severity
+        self.transform = transform
+        self.synset_to_idx = synset_mapping
+        self.max_samples = max_samples
+        self.samples = self._collect_samples()
+
+    def _collect_samples(self):
+        if self.corruption == "origin":
+            base = self.root / "origin"
+        else:
+            # Check if severity subdirectory exists
+            base_corr = self.root / self.corruption
+            base_sev = base_corr / str(self.severity)
+            if base_sev.exists():
+                base = base_sev
+            elif base_corr.exists():
+                # Fallback to corruption root if severity folder not found
+                # This assumes the corruption folder itself contains the synsets (e.g. flat structure or specific severity download)
+                base = base_corr
+            else:
+                base = base_sev # Let it fail in the next check if neither exists
+                
+        if not base.exists():
+            raise FileNotFoundError(f"ImageNet-C path not found: {base}")
+
+        samples = []
+        for synset_dir in base.iterdir():
+            if not synset_dir.is_dir():
+                continue
+            synset = synset_dir.name
+            if synset not in self.synset_to_idx:
+                continue
+            label = self.synset_to_idx[synset]
+            for img_path in synset_dir.iterdir():
+                if img_path.suffix.lower() not in {".jpeg", ".jpg", ".png"}:
+                    continue
+                samples.append((img_path, label))
+                if self.max_samples and len(samples) >= self.max_samples:
+                    return samples
+
+        if len(samples) == 0:
+            raise RuntimeError(f"No samples found under {base}")
+        return samples
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        img_path, label = self.samples[idx]
+        img = Image.open(img_path).convert("RGB")
+        
+        # Load clean image
+        # Assuming structure: root/<corruption>/<severity>/<synset>/<image>
+        # Clean image: root/origin/<synset>/<image>
+        synset = img_path.parent.name
+        filename = img_path.name
+        clean_path = self.root / "origin" / synset / filename
+        
+        if clean_path.exists():
+            clean_img = Image.open(clean_path).convert("RGB")
+        else:
+            # Strict mode: raise error if clean image is missing
+            raise FileNotFoundError(f"[ERROR] Clean image not found at {clean_path}. PSNR/SSIM calculation requires paired clean images.")
 
         if self.transform is not None:
-            clean_t = self.transform(clean)
-            degraded_t = self.transform(degraded)
-        else:
-            clean_t, degraded_t = clean, degraded
-
-        return degraded_t, clean_t, label
-
-
-class ImageNetValCDataset(Dataset):
-    def __init__(self, root, transform=None):
-        """
-        root: data/imagenet_val_c
-        假定：
-        - root/images/<id>.jpg
-        - root/labels.txt  (id label)
-        """
-        self.root = Path(root)
-        self.transform = transform
-        self.samples = []
-        with open(self.root / "labels.txt") as f:
-            for line in f:
-                img_id, label = line.strip().split()
-                self.samples.append((img_id, int(label)))
-
-    def __len__(self):
-        return len(self.samples)
-
-    def __getitem__(self, idx):
-        img_id, label = self.samples[idx]
-        img = Image.open(self.root / "images" / f"{img_id}.jpg").convert("RGB")
-        if self.transform:
             img = self.transform(img)
-        return img, int(label)
+            clean_img = self.transform(clean_img)
+            
+        return img, clean_img, label

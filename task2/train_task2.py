@@ -121,7 +121,8 @@ def main():
         epoch_loss_total = 0.0
         start_time = time.time()
         
-        for batch_idx, (degraded, clean, labels) in enumerate(train_loader):
+        train_pbar = tqdm(train_loader, desc=f"Epoch {epoch}/{args.epochs} [Train]", leave=False, ncols=100)
+        for batch_idx, (degraded, clean, labels) in enumerate(train_pbar):
             degraded = degraded.to(device)
             clean = clean.to(device)
             labels = labels.to(device)
@@ -157,11 +158,16 @@ def main():
             epoch_loss_total += loss.item()
             
             if batch_idx % args.print_every == 0:
-                print(
-                    f"  [Epoch {epoch}][{batch_idx}/{len(train_loader)}] "
-                    f"Loss: {loss.item():.6f} | MSE: {loss_mse.item():.6f} | "
-                    f"KL: {loss_kl.item():.6f} | CE: {loss_ce.item():.6f}"
-                )
+                train_pbar.set_postfix({
+                    "loss": f"{loss.item():.4f}",
+                    "mse": f"{loss_mse.item():.4f}",
+                    "kl": f"{loss_kl.item():.4f}"
+                })
+                # print(
+                #     f"  [Epoch {epoch}][{batch_idx}/{len(train_loader)}] "
+                #     f"Loss: {loss.item():.6f} | MSE: {loss_mse.item():.6f} | "
+                #     f"KL: {loss_kl.item():.6f} | CE: {loss_ce.item():.6f}"
+                # )
                 
         num_train_batches = len(train_loader)
         epoch_loss_mse /= num_train_batches
@@ -179,8 +185,10 @@ def main():
         val_loss_kl = 0.0
         val_loss_ce = 0.0
         val_loss_total = 0.0
+        
+        val_pbar = tqdm(val_loader, desc=f"Epoch {epoch}/{args.epochs} [Val]", leave=False, ncols=100)
         with torch.no_grad():
-            for degraded, clean, labels in val_loader:
+            for degraded, clean, labels in val_pbar:
                 degraded = degraded.to(device)
                 clean = clean.to(device)
                 labels = labels.to(device)

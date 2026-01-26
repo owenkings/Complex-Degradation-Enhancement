@@ -3,6 +3,7 @@ import sys
 import argparse
 import time
 from pathlib import Path
+from tqdm import tqdm
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -93,7 +94,8 @@ def main():
         epoch_loss = 0.0
         start_time = time.time()
         
-        for batch_idx, (_, clean, _) in enumerate(train_loader):
+        train_pbar = tqdm(train_loader, desc=f"Epoch {epoch}/{args.epochs} [Train]", leave=False, ncols=100)
+        for batch_idx, (_, clean, _) in enumerate(train_pbar):
             # We only use clean images for training the decoder (Autoencoder style)
             clean = clean.to(device)
             
@@ -116,10 +118,15 @@ def main():
             epoch_loss += loss.item()
             
             if batch_idx % args.print_every == 0:
-                print(
-                    f"  [Epoch {epoch}][{batch_idx}/{len(train_loader)}] "
-                    f"Loss: {loss.item():.6f} | L1: {loss_l1.item():.6f} | Perc: {loss_perc.item():.6f}"
-                )
+                train_pbar.set_postfix({
+                    "loss": f"{loss.item():.4f}",
+                    "l1": f"{loss_l1.item():.4f}",
+                    "perc": f"{loss_perc.item():.4f}"
+                })
+                # print(
+                #     f"  [Epoch {epoch}][{batch_idx}/{len(train_loader)}] "
+                #     f"Loss: {loss.item():.6f} | L1: {loss_l1.item():.6f} | Perc: {loss_perc.item():.6f}"
+                # )
                 
         epoch_loss /= len(train_loader)
         print(f"[Epoch {epoch}] Train Loss: {epoch_loss:.6f}, Time: {time.time() - start_time:.2f}s")
@@ -127,8 +134,9 @@ def main():
         # Validation
         decoder.eval()
         val_loss = 0.0
+        val_pbar = tqdm(val_loader, desc=f"Epoch {epoch}/{args.epochs} [Val]", leave=False, ncols=100)
         with torch.no_grad():
-            for _, clean, _ in val_loader:
+            for _, clean, _ in val_pbar:
                 clean = clean.to(device)
                 
                 feat_clean = vgg.extract_shallow_features(clean)

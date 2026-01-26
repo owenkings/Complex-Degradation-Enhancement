@@ -14,6 +14,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, models
 from PIL import Image
+from tqdm import tqdm
 
 from utils.seed_utils import set_global_seed
 from utils.metrics import batch_psnr_ssim
@@ -227,8 +228,9 @@ def main():
             psnr_accum = 0.0
             ssim_accum = 0.0
 
+            pbar = tqdm(loader, desc=f"Eval {corruption} sev {severity}", leave=False, ncols=100)
             with torch.no_grad():
-                for img, clean_img, label in loader:
+                for img, clean_img, label in pbar:
                     img = img.to(device)
                     clean_img = clean_img.to(device)
                     label = label.to(device)
