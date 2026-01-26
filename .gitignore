@@ -22,3 +22,4 @@ Restormer/
 checkpoints_task1_restormer/
 *.log
 checkpoints/
+extra/

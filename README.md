@@ -127,11 +127,37 @@ Task 1 (Restormer) 需要加载预训练的去模糊模型权重。由于文件�
       --ckpt task1/checkpoints/restormer_best.pth \
       --save-json task1/logs/task1_imagenetc_results.json \
       --corruption "all" \
+      --severity "flat" \
       --batch-size 32 \
       --num-workers 8
     ```
     *   `--save-json`: **(必须)** 将详细结果保存为 JSON 文件，用于后续 Task 3 的对比分析。
     *   `--corruption all`: 将自动遍历所有预定义的降质类型。
+
+### 4. 可选评估 (CUB-C)
+以下评估脚本不属于课程硬性要求，可用于补充分析或自检。
+
+*   **PSNR/SSIM**：
+    ```bash
+    python task1/eval_task1_cubc_psnr.py \
+      --data-root data/CUB-C \
+      --corruption all \
+      --split test \
+      --ckpt task1/checkpoints/restormer_best.pth \
+      --batch-size 4 \
+      --num-workers 4
+    ```
+
+*   **VGG16 分类**：
+    ```bash
+    python task1/eval_task1_cubc_vgg16.py \
+      --data-root data/CUB-C \
+      --corruption all \
+      --split test \
+      --ckpt task1/checkpoints/restormer_best.pth \
+      --batch-size 16 \
+      --num-workers 4
+    ```
 
 ## 实验二：特征增强 (Task 2)
 
@@ -167,6 +193,7 @@ Task 1 (Restormer) 需要加载预训练的去模糊模型权重。由于文件�
       --synset-mapping data/ImageNet-C/synset_mapping.txt \
       --enhancer-path task2/checkpoints/mamba_enhancer_best.pth \
       --corruption "all" \
+      --severity "flat" \
       --batch-size 64 \
       --num-workers 8
     ```
@@ -183,14 +210,12 @@ Task 1 (Restormer) 需要加载预训练的去模糊模型权重。由于文件�
     ```bash
     python task3/train_decoder.py \
       --data-root data/CUB-C \
-      --corruption all \
-      --val-split test \
+      --corruption origin \
       --batch-size 32 \
       --num-workers 8 \
       --epochs 50 \
       --lr 2e-4 \
       --save-dir task3/checkpoints \
-      --log-dir task3/logs \
       --lambda-perc 0.1
     ```
 
@@ -207,6 +232,7 @@ Task 1 (Restormer) 需要加载预训练的去模糊模型权重。由于文件�
       --decoder-ckpt task3/checkpoints/feature_decoder_best.pth \
       --output-dir task3/results \
       --corruption "all" \
+      --severity "flat" \
       --batch-size 32 \
       --num-workers 8 \
       --save-results
@@ -234,6 +260,7 @@ Task 1 (Restormer) 需要加载预训练的去模糊模型权重。由于文件�
 1.  **数据集说明**
     *   **训练集**：`data/CUB-C`。包含 `origin` (GT) 和多种降质版本。
     *   **测试集**：`data/ImageNet-C`。用于验证模型在真实大规模通用数据集上的泛化能力。
+    *   **Severity**：当前数据为扁平结构，无 1-5 子目录，评估时请使用 `--severity flat`。
 
 2.  **Mamba 安装失败**
     *   请务必按照“实验环境准备”中的步骤，使用 `--no-build-isolation` 重新编译安装 `mamba_ssm`，以解决 `undefined symbol` 或 PyTorch 版本不匹配问题。

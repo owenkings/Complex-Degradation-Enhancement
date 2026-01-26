@@ -23,7 +23,7 @@ def parse_args():
     parser.add_argument("--data-root", type=str, default=str(PROJECT_ROOT / "data" / "ImageNet-C"))
     parser.add_argument("--dataset-type", type=str, default="imagenet-c", choices=["imagenet-c", "cub-c"])
     parser.add_argument("--enhancer-path", type=str, default=str(CURRENT_DIR / "checkpoints" / "mamba_enhancer_best.pth"))
-    parser.add_argument("--backend", type=str, default="mamba", choices=["mamba", "transformer"], help="Backend used for training")
+    parser.add_argument("--backend", type=str, default="mamba", choices=["mamba"], help="Backend used for training")
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--baseline", action="store_true", help="Run without enhancer (baseline)")
@@ -100,6 +100,7 @@ def main():
         print("[INFO] Running Baseline (No Enhancement)")
         
     # 2. Dataset Logic
+    data_root = Path(args.data_root)
     ALL_CORRUPTIONS = [
         "fog", "brightness", "contrast", "defocus_blur", "elastic_transform",
         "gaussian_blur", "gaussian_noise", "glass_blur", "impulse_noise",
@@ -112,7 +113,6 @@ def main():
     
     if args.dataset_type == "imagenet-c":
         # Check root
-        data_root = Path(args.data_root)
         if not data_root.exists():
             print(f"[ERROR] Data root {data_root} does not exist.")
             return

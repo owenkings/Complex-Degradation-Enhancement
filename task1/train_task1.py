@@ -179,7 +179,7 @@ def main():
     if not os.path.exists(log_path):
         with open(log_path, "w", newline="") as f:
             writer = csv.writer(f)
-            writer.writerow(["epoch", "train_loss", "val_psnr", "val_ssim", "time"])
+            writer.writerow(["epoch", "corruption", "train_l1", "val_psnr", "val_ssim", "time"])
 
     print(f"[INFO] Start training for {num_epochs} epochs...")
 
@@ -234,8 +234,8 @@ def main():
                 # Ensure range [0,1]
                 restored = torch.clamp(restored, 0, 1)
                 psnr, ssim = batch_psnr_ssim(restored, clean)
-                total_psnr += psnr.item() * degraded.size(0)
-                total_ssim += ssim.item() * degraded.size(0)
+                total_psnr += psnr * degraded.size(0)
+                total_ssim += ssim * degraded.size(0)
 
         avg_psnr = total_psnr / len(val_dataset)
         avg_ssim = total_ssim / len(val_dataset)
@@ -246,7 +246,7 @@ def main():
         # Logging
         with open(log_path, "a", newline="") as f:
             writer = csv.writer(f)
-            writer.writerow([epoch, avg_loss, avg_psnr, avg_ssim, epoch_time])
+            writer.writerow([epoch, corruption, avg_loss, avg_psnr, avg_ssim, epoch_time])
 
         # Checkpointing
         save_dict = {

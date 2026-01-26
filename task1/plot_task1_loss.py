@@ -26,7 +26,8 @@ def main():
         reader = csv.DictReader(f)
         for row in reader:
             epochs.append(int(row["epoch"]))
-            train_l1.append(float(row["train_l1"]))
+            train_key = "train_l1" if "train_l1" in row else "train_loss"
+            train_l1.append(float(row[train_key]))
             val_psnr.append(float(row["val_psnr"]))
             val_ssim.append(float(row["val_ssim"]))
 

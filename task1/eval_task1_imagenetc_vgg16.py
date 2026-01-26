@@ -125,8 +125,13 @@ def build_restormer():
 
 def load_checkpoint(model, ckpt_path, map_location="cpu"):
     ckpt = torch.load(ckpt_path, map_location=map_location)
-    if isinstance(ckpt, dict) and "model_state" in ckpt:
-        state_dict = ckpt["model_state"]
+    if isinstance(ckpt, dict):
+        if "model_state" in ckpt:
+            state_dict = ckpt["model_state"]
+        elif "model_state_dict" in ckpt:
+            state_dict = ckpt["model_state_dict"]
+        else:
+            state_dict = ckpt
     else:
         state_dict = ckpt
     model.load_state_dict(state_dict, strict=True)
