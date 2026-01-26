@@ -1,11 +1,13 @@
 import os
 import sys
 import argparse
+import csv
 import time
 from pathlib import Path
 from tqdm import tqdm
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torchvision import transforms
 
@@ -30,6 +32,9 @@ def parse_args():
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--save-dir", type=str, default=str(CURRENT_DIR / "checkpoints"))
     parser.add_argument("--print-every", type=int, default=10)
+    parser.add_argument("--alpha-kl", type=float, default=0.1)
+    parser.add_argument("--temperature", type=float, default=2.0)
+    parser.add_argument("--beta-ce", type=float, default=0.0)
     return parser.parse_args()
 
 def get_transforms():
@@ -84,70 +89,156 @@ def main():
     # 3. Optimization
     optimizer = torch.optim.AdamW(enhancer.parameters(), lr=args.lr)
     criterion = nn.MSELoss()
+    kl_criterion = nn.KLDivLoss(reduction="batchmean")
+    ce_criterion = nn.CrossEntropyLoss()
     
     os.makedirs(args.save_dir, exist_ok=True)
     
     # 4. Training Loop
     best_val_loss = float('inf')
+    log_path = os.path.join(args.save_dir, "train_log.csv")
+    log_exists = os.path.exists(log_path)
+    log_file = open(log_path, "a", newline="")
+    log_writer = csv.writer(log_file)
+    if not log_exists:
+        log_writer.writerow([
+            "epoch",
+            "train_loss_mse",
+            "train_loss_kl",
+            "train_loss_ce",
+            "train_loss_total",
+            "val_loss_mse",
+            "val_loss_kl",
+            "val_loss_ce",
+            "val_loss_total"
+        ])
     
     for epoch in range(1, args.epochs + 1):
         enhancer.train()
-        epoch_loss = 0.0
+        epoch_loss_mse = 0.0
+        epoch_loss_kl = 0.0
+        epoch_loss_ce = 0.0
+        epoch_loss_total = 0.0
         start_time = time.time()
         
-        for batch_idx, (degraded, clean, _) in enumerate(train_loader):
+        for batch_idx, (degraded, clean, labels) in enumerate(train_loader):
             degraded = degraded.to(device)
             clean = clean.to(device)
+            labels = labels.to(device)
             
-            # Extract features (No Grad for VGG)
             with torch.no_grad():
                 feat_deg = vgg.extract_shallow_features(degraded)
                 feat_clean = vgg.extract_shallow_features(clean)
+                logits_clean = vgg.predict_from_features(feat_clean)
             
-            # Enhance features
             feat_enhanced = enhancer(feat_deg)
             
-            # Loss: MSE(Enhanced, Clean)
-            loss = criterion(feat_enhanced, feat_clean)
+            logits_enh = vgg.predict_from_features(feat_enhanced)
+            
+            loss_mse = criterion(feat_enhanced, feat_clean)
+            p_clean = F.softmax(logits_clean / args.temperature, dim=1)
+            logp_enh = F.log_softmax(logits_enh / args.temperature, dim=1)
+            loss_kl = kl_criterion(logp_enh, p_clean) * (args.temperature ** 2)
+            
+            if args.beta_ce > 0:
+                loss_ce = ce_criterion(logits_enh, labels)
+            else:
+                loss_ce = torch.zeros((), device=device)
+            
+            loss = loss_mse + args.alpha_kl * loss_kl + args.beta_ce * loss_ce
             
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
             
-            epoch_loss += loss.item()
+            epoch_loss_mse += loss_mse.item()
+            epoch_loss_kl += loss_kl.item()
+            epoch_loss_ce += loss_ce.item()
+            epoch_loss_total += loss.item()
             
             if batch_idx % args.print_every == 0:
-                print(f"  [Epoch {epoch}][{batch_idx}/{len(train_loader)}] Loss: {loss.item():.6f}")
+                print(
+                    f"  [Epoch {epoch}][{batch_idx}/{len(train_loader)}] "
+                    f"Loss: {loss.item():.6f} | MSE: {loss_mse.item():.6f} | "
+                    f"KL: {loss_kl.item():.6f} | CE: {loss_ce.item():.6f}"
+                )
                 
-        epoch_loss /= len(train_loader)
-        print(f"[Epoch {epoch}] Train Loss: {epoch_loss:.6f}, Time: {time.time() - start_time:.2f}s")
+        num_train_batches = len(train_loader)
+        epoch_loss_mse /= num_train_batches
+        epoch_loss_kl /= num_train_batches
+        epoch_loss_ce /= num_train_batches
+        epoch_loss_total /= num_train_batches
+        print(
+            f"[Epoch {epoch}] Train Loss: {epoch_loss_total:.6f} "
+            f"(MSE: {epoch_loss_mse:.6f}, KL: {epoch_loss_kl:.6f}, CE: {epoch_loss_ce:.6f}), "
+            f"Time: {time.time() - start_time:.2f}s"
+        )
         
-        # Validation
         enhancer.eval()
-        val_loss = 0.0
+        val_loss_mse = 0.0
+        val_loss_kl = 0.0
+        val_loss_ce = 0.0
+        val_loss_total = 0.0
         with torch.no_grad():
-            for degraded, clean, _ in val_loader:
+            for degraded, clean, labels in val_loader:
                 degraded = degraded.to(device)
                 clean = clean.to(device)
+                labels = labels.to(device)
                 
                 feat_deg = vgg.extract_shallow_features(degraded)
                 feat_clean = vgg.extract_shallow_features(clean)
+                logits_clean = vgg.predict_from_features(feat_clean)
                 feat_enhanced = enhancer(feat_deg)
+                logits_enh = vgg.predict_from_features(feat_enhanced)
                 
-                loss = criterion(feat_enhanced, feat_clean)
-                val_loss += loss.item()
+                loss_mse = criterion(feat_enhanced, feat_clean)
+                p_clean = F.softmax(logits_clean / args.temperature, dim=1)
+                logp_enh = F.log_softmax(logits_enh / args.temperature, dim=1)
+                loss_kl = kl_criterion(logp_enh, p_clean) * (args.temperature ** 2)
+                if args.beta_ce > 0:
+                    loss_ce = ce_criterion(logits_enh, labels)
+                else:
+                    loss_ce = torch.zeros((), device=device)
+                loss = loss_mse + args.alpha_kl * loss_kl + args.beta_ce * loss_ce
+                
+                val_loss_mse += loss_mse.item()
+                val_loss_kl += loss_kl.item()
+                val_loss_ce += loss_ce.item()
+                val_loss_total += loss.item()
         
-        val_loss /= len(val_loader)
-        print(f"[Epoch {epoch}] Val Loss: {val_loss:.6f}")
+        num_val_batches = len(val_loader)
+        val_loss_mse /= num_val_batches
+        val_loss_kl /= num_val_batches
+        val_loss_ce /= num_val_batches
+        val_loss_total /= num_val_batches
+        print(
+            f"[Epoch {epoch}] Val Loss: {val_loss_total:.6f} "
+            f"(MSE: {val_loss_mse:.6f}, KL: {val_loss_kl:.6f}, CE: {val_loss_ce:.6f})"
+        )
+        
+        log_writer.writerow([
+            epoch,
+            f"{epoch_loss_mse:.6f}",
+            f"{epoch_loss_kl:.6f}",
+            f"{epoch_loss_ce:.6f}",
+            f"{epoch_loss_total:.6f}",
+            f"{val_loss_mse:.6f}",
+            f"{val_loss_kl:.6f}",
+            f"{val_loss_ce:.6f}",
+            f"{val_loss_total:.6f}"
+        ])
+        log_file.flush()
         
         # Save Best
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
+        if val_loss_total < best_val_loss:
+            best_val_loss = val_loss_total
             torch.save(enhancer.state_dict(), os.path.join(args.save_dir, "mamba_enhancer_best.pth"))
             print(f"  Saved best model to {args.save_dir}/mamba_enhancer_best.pth")
             
         # Save Last
         torch.save(enhancer.state_dict(), os.path.join(args.save_dir, "mamba_enhancer_last.pth"))
+    
+    log_file.close()
 
 if __name__ == "__main__":
     main()

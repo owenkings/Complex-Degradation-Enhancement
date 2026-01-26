@@ -139,7 +139,7 @@ python task1/eval_task1_cubc_psnr.py --ckpt task1/checkpoints_task1_restormer/al
 **核心逻辑**：不修复图像，而是提取 VGG16 浅层特征 (Frozen)，通过 Mamba Enhancer 进行“特征去噪”，再送入 VGG16 深层进行分类。
 
 ### 1. 训练 (Training)
-使用 CUB-C 数据集训练 Mamba Enhancer。
+使用 CUB-C 数据集训练 Mamba Enhancer（特征回归 + 语义一致性蒸馏）。
 
 *   **指令**：
     ```bash
@@ -147,9 +147,13 @@ python task1/eval_task1_cubc_psnr.py --ckpt task1/checkpoints_task1_restormer/al
       --data-root data/CUB-C \
       --epochs 20 \
       --batch-size 32 \
+      --alpha-kl 0.1 \
+      --temperature 2.0 \
+      --beta-ce 0.0 \
       --save-dir task2/checkpoints
     ```
     *   注意：Task 2 强制使用 Mamba 架构，代码中已锁定 backend。
+    *   训练日志：`task2/checkpoints/train_log.csv` 记录 MSE/KL/(CE)/Total。
 
 ### 2. 评估 (Evaluation)
 在 ImageNet-C 上评估特征增强后的分类准确率。
@@ -167,10 +171,10 @@ python task1/eval_task1_cubc_psnr.py --ckpt task1/checkpoints_task1_restormer/al
 
 ## 实验三：基于VGG浅层表征空间的图像增强 (Task 3)
 
-**核心逻辑**：基于Task 2中训练好的Feature Enhancer，设计一个解码器 (Feature Decoder)，将增强后的VGG浅层特征映射回图像空间。
+**核心逻辑**：基于Task 2中训练好的Feature Enhancer，设计一个解码器 (Feature Decoder)，将增强后的VGG浅层特征映射回图像空间。解码器采用 PixelShuffle 上采样与轻量残差块。
 
 ### 1. 训练解码器 (Training Decoder)
-使用 CUB-C (Origin) 清晰图像训练解码器。
+使用 CUB-C (Origin) 清晰图像训练解码器，损失为 L1 + 感知损失。
 
 *   **指令**：
     ```bash
@@ -178,6 +182,7 @@ python task1/eval_task1_cubc_psnr.py --ckpt task1/checkpoints_task1_restormer/al
       --data-root data/CUB-C \
       --epochs 20 \
       --batch-size 32 \
+      --lambda-perc 0.1 \
       --save-dir task3/checkpoints
     ```
 

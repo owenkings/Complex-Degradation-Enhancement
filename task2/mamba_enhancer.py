@@ -68,7 +68,9 @@ class MambaFeatureEnhancer(nn.Module):
         ])
         
         self.out_proj = nn.Conv2d(in_channels, in_channels, kernel_size=1)
-        self.act = nn.GELU()
+        self.gate = nn.Conv2d(in_channels, in_channels, kernel_size=1)
+        nn.init.zeros_(self.gate.weight)
+        nn.init.constant_(self.gate.bias, -2.0)
 
     def forward(self, x):
         """
@@ -84,12 +86,14 @@ class MambaFeatureEnhancer(nn.Module):
         x_flat = x.view(B, C, H * W).permute(0, 2, 1)
         
         for blk in self.blocks:
-            x_flat = blk(x_flat)
+            y_f = blk(x_flat)
+            y_b = blk(torch.flip(x_flat, dims=[1]))
+            y_b = torch.flip(y_b, dims=[1])
+            x_flat = y_f + y_b
             
         # Reshape back: (B, H*W, C) -> (B, C, H, W)
         x_flat = x_flat.permute(0, 2, 1).view(B, C, H, W)
         
         x_enh = self.out_proj(x_flat)
-        
-        # Residual Connection
-        return residual + x_enh
+        gate = torch.sigmoid(self.gate(x))
+        return residual + gate * x_enh

@@ -17,6 +17,7 @@ from utils.seed_utils import set_global_seed
 from utils.dataset import CubCTrainDataset
 from task2.vgg_feature_wrapper import VGG16FeatureWrapper
 from task3.decoder import FeatureDecoder
+from task3.perceptual import VGGPerceptual
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -30,6 +31,7 @@ def parse_args():
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--save-dir", type=str, default=str(CURRENT_DIR / "checkpoints"))
     parser.add_argument("--print-every", type=int, default=10)
+    parser.add_argument("--lambda-perc", type=float, default=0.1)
     return parser.parse_args()
 
 def get_transforms():
@@ -78,7 +80,8 @@ def main():
     
     # 3. Optimization
     optimizer = torch.optim.AdamW(decoder.parameters(), lr=args.lr)
-    criterion = nn.MSELoss()
+    l1_criterion = nn.L1Loss()
+    perceptual = VGGPerceptual(layer="relu2_2").to(device)
     
     os.makedirs(args.save_dir, exist_ok=True)
     
@@ -101,8 +104,9 @@ def main():
             # Decode features
             rec_img = decoder(feat_clean)
             
-            # Loss: MSE(Reconstructed, Original Clean)
-            loss = criterion(rec_img, clean)
+            loss_l1 = l1_criterion(rec_img, clean)
+            loss_perc = perceptual(rec_img, clean)
+            loss = loss_l1 + args.lambda_perc * loss_perc
             
             optimizer.zero_grad()
             loss.backward()
@@ -111,7 +115,10 @@ def main():
             epoch_loss += loss.item()
             
             if batch_idx % args.print_every == 0:
-                print(f"  [Epoch {epoch}][{batch_idx}/{len(train_loader)}] Loss: {loss.item():.6f}")
+                print(
+                    f"  [Epoch {epoch}][{batch_idx}/{len(train_loader)}] "
+                    f"Loss: {loss.item():.6f} | L1: {loss_l1.item():.6f} | Perc: {loss_perc.item():.6f}"
+                )
                 
         epoch_loss /= len(train_loader)
         print(f"[Epoch {epoch}] Train Loss: {epoch_loss:.6f}, Time: {time.time() - start_time:.2f}s")
@@ -126,7 +133,9 @@ def main():
                 feat_clean = vgg.extract_shallow_features(clean)
                 rec_img = decoder(feat_clean)
                 
-                loss = criterion(rec_img, clean)
+                loss_l1 = l1_criterion(rec_img, clean)
+                loss_perc = perceptual(rec_img, clean)
+                loss = loss_l1 + args.lambda_perc * loss_perc
                 val_loss += loss.item()
         
         val_loss /= len(val_loader)

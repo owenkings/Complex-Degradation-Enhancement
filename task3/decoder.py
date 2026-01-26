@@ -1,33 +1,43 @@
 import torch
 import torch.nn as nn
 
+class ResBlock(nn.Module):
+    def __init__(self, channels):
+        super().__init__()
+        self.conv1 = nn.Conv2d(channels, channels, kernel_size=3, padding=1)
+        self.act = nn.ReLU(inplace=True)
+        self.conv2 = nn.Conv2d(channels, channels, kernel_size=3, padding=1)
+    
+    def forward(self, x):
+        return x + self.conv2(self.act(self.conv1(x)))
+
 class FeatureDecoder(nn.Module):
     def __init__(self):
         super().__init__()
-        # Input: 128 x H/2 x W/2 (Assuming 224x224 input image -> 112x112 features)
-        
-        # Reverse of VGG Block 2 (Conv 64->128, Conv 128->128)
-        # We go 128 -> 128 -> 64
-        self.layer1 = nn.Sequential(
+        self.stem = nn.Sequential(
             nn.Conv2d(128, 128, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(128, 64, kernel_size=3, padding=1),
             nn.ReLU(inplace=True)
         )
-        
-        # Reverse of MaxPool
-        self.upsample = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False)
-        
-        # Reverse of VGG Block 1 (Conv 3->64, Conv 64->64)
-        # We go 64 -> 64 -> 3
-        self.layer2 = nn.Sequential(
-            nn.Conv2d(64, 64, kernel_size=3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(64, 3, kernel_size=3, padding=1)
+        self.res1 = ResBlock(128)
+        self.down = nn.Conv2d(128, 128, kernel_size=3, stride=2, padding=1)
+        self.res2 = ResBlock(128)
+        self.up1 = nn.Sequential(
+            nn.Conv2d(128, 64 * 4, kernel_size=3, padding=1),
+            nn.PixelShuffle(2),
+            nn.ReLU(inplace=True)
+        )
+        self.res3 = ResBlock(64)
+        self.up2 = nn.Sequential(
+            nn.Conv2d(64, 3 * 4, kernel_size=3, padding=1),
+            nn.PixelShuffle(2)
         )
         
     def forward(self, x):
-        x = self.layer1(x)
-        x = self.upsample(x)
-        x = self.layer2(x)
+        x = self.stem(x)
+        x = self.res1(x)
+        x = self.down(x)
+        x = self.res2(x)
+        x = self.up1(x)
+        x = self.res3(x)
+        x = self.up2(x)
         return x

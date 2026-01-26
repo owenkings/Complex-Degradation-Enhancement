@@ -24,3 +24,5 @@ checkpoints_task1_restormer/
 doc/
 *.log
 checkpoints/
+
+task2/logs/
