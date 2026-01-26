@@ -80,7 +80,7 @@ def parse_args():
     parser.add_argument("--amp", action="store_true")
     parser.add_argument("--print-every", type=int, default=50)
     parser.add_argument("--save-dir", type=str, default=str(CURRENT_DIR / "checkpoints"))
-    parser.add_argument("--log-path", type=str, default=str(CURRENT_DIR / "logs"))
+    parser.add_argument("--log-path", type=str, default=None)
     parser.add_argument("--pretrained", type=str, default=str(RESTORMER_DIR / "Motion_Deblurring" / "pretrained_models" / "motion_deblurring.pth"))
     parser.add_argument("--skip-pretrained", action="store_true")
     parser.add_argument("--resume", type=str, default=None)
@@ -98,34 +98,44 @@ def main():
     num_epochs = args.epochs
     print_every = args.print_every
     accum_steps = max(1, int(args.accum_steps))
-    save_dir = Path(args.save_dir)
-    log_path = Path(args.log_path) if args.log_path else save_dir / "train_log.csv"
-    pretrained_path = Path(args.pretrained) if args.pretrained else None
-    resume_path = Path(args.resume) if args.resume else None
 
-    transform = get_transforms()
-
-    train_ds = CubCTrainDataset(
+    # 1. Dataset & Dataloader
+    print(f"[INFO] Loading CUB-C dataset from {data_root} (split='train')")
+    transforms_ = get_transforms()
+    train_dataset = CubCTrainDataset(
         root=data_root,
         corruption=corruption,
         split="train",
-        transform=transform,
+        transform=transforms_
     )
-    val_ds = CubCTrainDataset(
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=args.batch_size,
+        shuffle=True,
+        num_workers=args.num_workers,
+        pin_memory=True
+    )
+
+    print(f"[INFO] Loading CUB-C dataset from {data_root} (split='{val_split}')")
+    val_dataset = CubCTrainDataset(
         root=data_root,
         corruption=corruption,
         split=val_split,
-        transform=transform,
-    )
-
-    train_loader = DataLoader(
-        train_ds, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True
+        transform=transforms_
     )
     val_loader = DataLoader(
-        val_ds, batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, pin_memory=True
+        val_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=args.num_workers,
+        pin_memory=True
     )
 
-    print(f"[INFO] Train samples: {len(train_ds)}, Val samples: {len(val_ds)}")
+    print(f"[INFO] Train samples: {len(train_dataset)}, Val samples: {len(val_dataset)}")
+
+    # 2. Model
+    # Restormer default args: 
+    # inp_channels=3, out_channels=3, dim=48, num_blocks=[4,6,6,8], num_refinement_blocks=4, heads=[1,2,4,8], ffn_expansion_factor=2.66, bias=False, LayerNorm_type='WithBias'
     model = Restormer(
         inp_channels=3,
         out_channels=3,
@@ -135,117 +145,125 @@ def main():
         heads=[1, 2, 4, 8],
         ffn_expansion_factor=2.66,
         bias=False,
-        LayerNorm_type='WithBias',
-        dual_pixel_task=False,
+        LayerNorm_type='WithBias'
     )
+    
+    if not args.skip_pretrained and os.path.exists(args.pretrained):
+        model = load_pretrained(model, args.pretrained)
+    elif not args.skip_pretrained:
+        print(f"[WARNING] Pretrained model not found at {args.pretrained}, training from scratch.")
+        
+    model.to(device)
 
-    model = model.to(device)
-
+    # 3. Optimizer & Loss
     criterion = nn.L1Loss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-    use_amp = args.amp and device == "cuda"
-    scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
+    scaler = torch.cuda.amp.GradScaler(enabled=args.amp)
 
-    os.makedirs(save_dir, exist_ok=True)
-    if not log_path.exists():
+    # Resume?
+    start_epoch = 1
+    if args.resume and os.path.exists(args.resume):
+        print(f"[INFO] Resuming from {args.resume}")
+        ckpt = torch.load(args.resume, map_location=device)
+        model.load_state_dict(ckpt["model_state_dict"])
+        optimizer.load_state_dict(ckpt["optimizer_state_dict"])
+        start_epoch = ckpt["epoch"] + 1
+
+    # 4. Logging
+    save_dir = Path(args.save_dir)
+    save_dir.mkdir(parents=True, exist_ok=True)
+    
+    log_path = args.log_path if args.log_path else str(save_dir / "train_log.csv")
+    Path(log_path).parent.mkdir(parents=True, exist_ok=True)
+    
+    if not os.path.exists(log_path):
         with open(log_path, "w", newline="") as f:
             writer = csv.writer(f)
-            writer.writerow(["epoch", "corruption", "train_l1", "val_psnr", "val_ssim", "lr", "epoch_time_sec"])
+            writer.writerow(["epoch", "train_loss", "val_psnr", "val_ssim", "time"])
 
-    best_val_psnr = 0.0
-    start_epoch = 1
+    print(f"[INFO] Start training for {num_epochs} epochs...")
 
-    if resume_path:
-        if not resume_path.exists():
-            raise FileNotFoundError(f"Resume checkpoint not found: {resume_path}")
-        ckpt = torch.load(resume_path, map_location=device)
-        model.load_state_dict(ckpt["model_state"])
-        optimizer.load_state_dict(ckpt["optimizer_state"])
-        start_epoch = int(ckpt["epoch"]) + 1
-        best_val_psnr = float(ckpt.get("best_val_psnr", 0.0))
-        print(f"[INFO] Resumed from {resume_path}, start_epoch={start_epoch}")
-    elif not args.skip_pretrained and pretrained_path:
-        if not pretrained_path.exists():
-            raise FileNotFoundError(f"Pretrained checkpoint not found: {pretrained_path}")
-        model = load_pretrained(model, pretrained_path, map_location="cpu")
+    # 5. Training Loop
+    best_psnr = 0.0
 
     for epoch in range(start_epoch, num_epochs + 1):
-        epoch_start = time.time()
-        # ------------- 训练阶段 -------------
         model.train()
         epoch_loss = 0.0
-
-        optimizer.zero_grad(set_to_none=True)
+        start_time = time.time()
         
-        pbar = tqdm(train_loader, desc=f"Epoch {epoch}/{num_epochs} [Train]", leave=True)
+        # Add tqdm for training
+        pbar = tqdm(train_loader, desc=f"Epoch {epoch}/{num_epochs}", leave=False, ncols=100)
+        
+        optimizer.zero_grad()
+        
         for batch_idx, (degraded, clean, _) in enumerate(pbar):
             degraded = degraded.to(device)
             clean = clean.to(device)
 
-            with torch.cuda.amp.autocast(enabled=use_amp):
-                pred = model(degraded)
-                loss = criterion(pred, clean)
-                loss_scaled = loss / accum_steps
+            with torch.cuda.amp.autocast(enabled=args.amp):
+                restored = model(degraded)
+                loss = criterion(restored, clean)
+                loss = loss / accum_steps
 
-            scaler.scale(loss_scaled).backward()
-            should_step = (batch_idx + 1) % accum_steps == 0 or (batch_idx + 1) == len(train_loader)
-            if should_step:
+            scaler.scale(loss).backward()
+
+            if (batch_idx + 1) % accum_steps == 0:
                 scaler.step(optimizer)
                 scaler.update()
-                optimizer.zero_grad(set_to_none=True)
+                optimizer.zero_grad()
 
-            current_loss = loss.item()
-            epoch_loss += current_loss * degraded.size(0)
+            current_loss = loss.item() * accum_steps
+            epoch_loss += current_loss
             
             pbar.set_postfix({"loss": f"{current_loss:.4f}"})
 
-        epoch_loss /= len(train_loader.dataset)
-        print(f"[Epoch {epoch:03d}] Train L1 Loss: {epoch_loss:.6f}")
+        avg_loss = epoch_loss / len(train_loader)
 
-        # ------------- 验证阶段 (PSNR/SSIM 在 CUB-C test split 上) -------------
+        # Validation
         model.eval()
-        val_psnr_sum, val_ssim_sum, val_count = 0.0, 0.0, 0
-
+        total_psnr = 0.0
+        total_ssim = 0.0
         with torch.no_grad():
-            val_pbar = tqdm(val_loader, desc=f"Epoch {epoch}/{num_epochs} [Val]", leave=False, ncols=100, mininterval=2.0)
-            for degraded, clean, _ in val_pbar:
+            for degraded, clean, _ in val_loader:
                 degraded = degraded.to(device)
                 clean = clean.to(device)
+                
+                with torch.cuda.amp.autocast(enabled=args.amp):
+                    restored = model(degraded)
+                
+                # Ensure range [0,1]
+                restored = torch.clamp(restored, 0, 1)
+                psnr, ssim = batch_psnr_ssim(restored, clean)
+                total_psnr += psnr.item() * degraded.size(0)
+                total_ssim += ssim.item() * degraded.size(0)
 
-                pred = model(degraded)
+        avg_psnr = total_psnr / len(val_dataset)
+        avg_ssim = total_ssim / len(val_dataset)
+        epoch_time = time.time() - start_time
 
-                psnr, ssim = batch_psnr_ssim(clean, pred)
-                bsz = degraded.size(0)
-                val_psnr_sum += psnr * bsz
-                val_ssim_sum += ssim * bsz
-                val_count += bsz
+        print(f"Epoch [{epoch}/{num_epochs}] Loss: {avg_loss:.4f} | PSNR: {avg_psnr:.2f} | SSIM: {avg_ssim:.4f} | Time: {epoch_time:.1f}s")
 
-        val_psnr = val_psnr_sum / val_count
-        val_ssim = val_ssim_sum / val_count
-        print(f"[Epoch {epoch:03d}] Val PSNR: {val_psnr:.3f}, SSIM: {val_ssim:.4f}")
-
-        epoch_time_sec = time.time() - epoch_start
+        # Logging
         with open(log_path, "a", newline="") as f:
             writer = csv.writer(f)
-            writer.writerow([epoch, corruption, epoch_loss, val_psnr, val_ssim, optimizer.param_groups[0]["lr"], epoch_time_sec])
+            writer.writerow([epoch, avg_loss, avg_psnr, avg_ssim, epoch_time])
 
-        if val_psnr > best_val_psnr:
-            best_val_psnr = val_psnr
-            best_path = save_dir / "restormer_best.pth"
-            torch.save(model.state_dict(), best_path)
-            print(f"[INFO] New best model saved to {best_path} (PSNR={best_val_psnr:.3f})")
-
-        ckpt_path = save_dir / f"restormer_epoch{epoch:03d}.pth"
-        torch.save({
+        # Checkpointing
+        save_dict = {
             "epoch": epoch,
-            "model_state": model.state_dict(),
-            "optimizer_state": optimizer.state_dict(),
-            "train_l1": epoch_loss,
-            "val_psnr": val_psnr,
-            "val_ssim": val_ssim,
-            "best_val_psnr": best_val_psnr,
-        }, ckpt_path)
+            "model_state_dict": model.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "best_psnr": best_psnr,
+        }
+        
+        # Save latest
+        torch.save(save_dict, save_dir / "restormer_latest.pth")
 
+        # Save best
+        if avg_psnr > best_psnr:
+            best_psnr = avg_psnr
+            torch.save(save_dict, save_dir / "restormer_best.pth")
+            print(f"[INFO] New best PSNR: {best_psnr:.2f}")
 
 if __name__ == "__main__":
     main()
