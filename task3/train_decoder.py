@@ -103,6 +103,7 @@ def main():
             
             # Decode features
             rec_img = decoder(feat_clean)
+            rec_img = torch.clamp(rec_img, -5.0, 5.0)
             
             loss_l1 = l1_criterion(rec_img, clean)
             loss_perc = perceptual(rec_img, clean)
@@ -132,6 +133,7 @@ def main():
                 
                 feat_clean = vgg.extract_shallow_features(clean)
                 rec_img = decoder(feat_clean)
+                rec_img = torch.clamp(rec_img, -5.0, 5.0)
                 
                 loss_l1 = l1_criterion(rec_img, clean)
                 loss_perc = perceptual(rec_img, clean)
