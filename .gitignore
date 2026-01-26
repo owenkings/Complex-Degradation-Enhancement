@@ -21,7 +21,6 @@ Restormer/
 *.sh
 
 checkpoints_task1_restormer/
-doc/
 *.log
 checkpoints/
 
