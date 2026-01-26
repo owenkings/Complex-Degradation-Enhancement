@@ -119,8 +119,8 @@ def main():
             
         # Determine corruptions
         if args.corruption == "all":
-            # List directories in root that are not .txt
-            corruptions = [d.name for d in data_root.iterdir() if d.is_dir() and d.name != "origin"]
+            # Use fixed list to ensure consistency with Task 1
+            corruptions = ["fog", "contrast", "brightness", "motion_blur", "snow"]
         else:
             corruptions = args.corruption.split(",")
             

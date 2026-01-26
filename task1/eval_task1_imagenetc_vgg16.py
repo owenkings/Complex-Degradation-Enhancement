@@ -15,10 +15,20 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, models
 from PIL import Image
 from tqdm import tqdm
+import importlib.util
 
 from utils.seed_utils import set_global_seed
 from utils.metrics import batch_psnr_ssim
-from basicsr.models.archs.restormer_arch import Restormer
+
+# Manual import of Restormer to avoid basicsr package issues
+restormer_path = RESTORMER_DIR / "basicsr" / "models" / "archs" / "restormer_arch.py"
+if not restormer_path.exists():
+    raise FileNotFoundError(f"Restormer arch not found at {restormer_path}")
+
+spec = importlib.util.spec_from_file_location("restormer_arch", restormer_path)
+restormer_module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(restormer_module)
+Restormer = restormer_module.Restormer
 
 ROOT = CURRENT_DIR
 
@@ -157,8 +167,8 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-root", type=str, default=str(PROJECT_ROOT / "data" / "ImageNet-C"))
     parser.add_argument("--ckpt", type=str, required=True)
-    parser.add_argument("--corruptions", type=str, default="fog,motion_blur")
-    parser.add_argument("--severities", type=str, default="1,2,3,4,5")
+    parser.add_argument("--corruption", type=str, default="fog,snow,brightness,contrast,motion_blur")
+    parser.add_argument("--severity", type=str, default="flat")
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--device", type=str, default="cuda")
@@ -194,8 +204,12 @@ def main():
     restormer = load_checkpoint(restormer, args.ckpt, map_location="cpu")
     restormer.to(device).eval()
 
-    corruptions = [c.strip() for c in args.corruptions.split(",") if c.strip()]
-    severities = [s.strip() for s in args.severities.split(",") if s.strip()]
+    if "all" in args.corruption.split(","):
+        corruptions = ["fog", "contrast", "brightness", "motion_blur", "snow"]
+    else:
+        corruptions = [c.strip() for c in args.corruption.split(",") if c.strip()]
+    
+    severities = [s.strip() for s in args.severity.split(",") if s.strip()]
     # TODO: 若某些 corruption 没有 severity 目录，请把 severities 改为空并调整逻辑
 
     results = []
@@ -274,7 +288,7 @@ def main():
             
             row = {
                 "corruption": corruption,
-                "severity": int(severity),
+                "severity": severity,
                 "top1_degraded": float(top1_base),
                 "top1_restored": float(top1_restored),
                 "delta_top1": float(top1_restored - top1_base),

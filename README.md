@@ -92,17 +92,19 @@ Task 1 (Restormer) 需要加载预训练的去模糊模型权重。由于文件�
     python -u task1/train_task1.py \
       --data-root data/CUB-C \
       --corruption all \
+      --val-split test \
       --epochs 50 \
       --batch-size 4 \
       --accum-steps 8 \
       --amp \
       --lr 5e-5 \
       --print-every 10 \
-      --save-dir task1/checkpoints_task1_restormer/all \
+      --save-dir task1/checkpoints \
+      --log-path task1/logs/train_log.csv \
       --pretrained Restormer/Motion_Deblurring/pretrained_models/motion_deblurring.pth
     ```
     *   `--corruption all`: 混合所有降质类型进行训练。
-    *   `--save-dir`: 权重及日志保存路径。
+    *   `--save-dir`: 权重保存路径。
 
 ### 2. 结果绘图 (Plotting)
 训练完成后，绘制 Loss 曲线及验证集 PSNR/SSIM 变化图。
@@ -110,29 +112,26 @@ Task 1 (Restormer) 需要加载预训练的去模糊模型权重。由于文件�
 *   **指令**：
     ```bash
     python task1/plot_task1_loss.py \
-      --log-path task1/checkpoints_task1_restormer/all/train_log.csv \
-      --out-path task1/checkpoints_task1_restormer/all/loss_curve.png
+      --log-path task1/logs/train_log.csv \
+      --out-path task1/plots/loss_curve.png
     ```
 
 ### 3. 评估与测试 (Evaluation)
-在 ImageNet-Val-C 上评估模型性能。此脚本会同时计算 **增强后的图像质量 (PSNR/SSIM)** 和 **VGG16 分类精度 (Accuracy)**。
+在 ImageNet-C 上评估模型性能。此脚本会同时计算 **增强后的图像质量 (PSNR/SSIM)** 和 **VGG16 分类精度 (Accuracy)**。
 
 *   **指令**：
     ```bash
     python task1/eval_task1_imagenetc_vgg16.py \
       --data-root data/ImageNet-C \
-      --ckpt task1/checkpoints_task1_restormer/all/best_checkpoint.pth \
-      --corruptions "fog,motion_blur" \
-      --severities "1,2,3,4,5" \
-      --save-json task1/logs/task1_imagenetc_results.json
+      --synset-mapping data/ImageNet-C/synset_mapping.txt \
+      --ckpt task1/checkpoints/restormer_best.pth \
+      --save-json task1/logs/task1_imagenetc_results.json \
+      --corruption "all" \
+      --batch-size 32 \
+      --num-workers 8
     ```
     *   `--save-json`: **(必须)** 将详细结果保存为 JSON 文件，用于后续 Task 3 的对比分析。
-    *   输出包含每种降质类型的 Accuracy, PSNR, SSIM。
-
-*(可选) 在 CUB-C 验证集上评估 PSNR/SSIM：*
-```bash
-python task1/eval_task1_cubc_psnr.py --ckpt task1/checkpoints_task1_restormer/all/best_checkpoint.pth --corruption all
-```
+    *   `--corruption all`: 将自动遍历所有预定义的降质类型。
 
 ## 实验二：特征增强 (Task 2)
 
@@ -145,12 +144,14 @@ python task1/eval_task1_cubc_psnr.py --ckpt task1/checkpoints_task1_restormer/al
     ```bash
     python task2/train_task2.py \
       --data-root data/CUB-C \
-      --epochs 20 \
-      --batch-size 32 \
+      --batch-size 8 \
+      --num-workers 4 \
+      --epochs 50 \
+      --lr 1e-4 \
+      --save-dir task2/checkpoints \
       --alpha-kl 0.1 \
       --temperature 2.0 \
-      --beta-ce 0.0 \
-      --save-dir task2/checkpoints
+      --beta-ce 0.0
     ```
     *   注意：Task 2 强制使用 Mamba 架构，代码中已锁定 backend。
     *   训练日志：`task2/checkpoints/train_log.csv` 记录 MSE/KL/(CE)/Total。
@@ -162,10 +163,12 @@ python task1/eval_task1_cubc_psnr.py --ckpt task1/checkpoints_task1_restormer/al
     ```bash
     python task2/eval_task2.py \
       --data-root data/ImageNet-C \
-      --enhancer-path task2/checkpoints/mamba_enhancer_best.pth \
       --dataset-type imagenet-c \
-      --corruption "fog,motion_blur" \
-      --severity "1,2,3,4,5"
+      --synset-mapping data/ImageNet-C/synset_mapping.txt \
+      --enhancer-path task2/checkpoints/mamba_enhancer_best.pth \
+      --corruption "all" \
+      --batch-size 64 \
+      --num-workers 8
     ```
     *   **结果保存**：脚本会自动将评估结果保存至 `task2/logs/task2_imagenetc_results.json`，供后续对比分析使用。
 
@@ -180,10 +183,15 @@ python task1/eval_task1_cubc_psnr.py --ckpt task1/checkpoints_task1_restormer/al
     ```bash
     python task3/train_decoder.py \
       --data-root data/CUB-C \
-      --epochs 20 \
+      --corruption all \
+      --val-split test \
       --batch-size 32 \
-      --lambda-perc 0.1 \
-      --save-dir task3/checkpoints
+      --num-workers 8 \
+      --epochs 50 \
+      --lr 2e-4 \
+      --save-dir task3/checkpoints \
+      --log-dir task3/logs \
+      --lambda-perc 0.1
     ```
 
 ### 2. 联合推理与可视化 (Inference)
@@ -192,24 +200,28 @@ python task1/eval_task1_cubc_psnr.py --ckpt task1/checkpoints_task1_restormer/al
 *   **指令**：
     ```bash
     python task3/run_task3.py \
-      --data-root data/CUB-C \
+      --data-root data/ImageNet-C \
+      --dataset-type imagenet-c \
+      --synset-mapping data/ImageNet-C/synset_mapping.txt \
       --enhancer-ckpt task2/checkpoints/mamba_enhancer_best.pth \
       --decoder-ckpt task3/checkpoints/feature_decoder_best.pth \
-      --save-results \
-      --output-dir task3/results
+      --output-dir task3/results \
+      --corruption "all" \
+      --batch-size 32 \
+      --num-workers 8 \
+      --save-results
     ```
     *   `--save-results`: 将保存 `降质 | 增强 | 清晰` 的对比图到 `task3/results`。
 
 ### 3. 结果对比与汇总 (Comparison)
-汇总 Task 1 (Image Enhancement) 和 Task 2 (Feature Enhancement) 的评估结果，生成对比报表和图表。
+汇总 Task 1 和 Task 2 的评估数据，生成对比表格和图表。
 
-*   **前置条件**：需先完成 Task 1 和 Task 2 的评估步骤，并生成了对应的 JSON 结果文件。
 *   **指令**：
     ```bash
     python task3/compare_results.py \
       --task1-json task1/logs/task1_imagenetc_results.json \
       --task2-json task2/logs/task2_imagenetc_results.json \
-      --output-dir task3/comparison_results
+      --out-dir task3/outputs
     ```
 *   **输出**：
     *   `comparison_summary.csv`: 详细的指标对比表格。

@@ -7,7 +7,6 @@ build/
 
 .ipynb_checkpoints/
 *.pyc
-*.png
 *.tif
 *.jpg
 *.pth
@@ -23,5 +22,3 @@ Restormer/
 checkpoints_task1_restormer/
 *.log
 checkpoints/
-
-task2/logs/
