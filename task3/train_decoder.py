@@ -25,14 +25,20 @@ def parse_args():
     parser.add_argument("--data-root", type=str, default=str(PROJECT_ROOT / "data" / "CUB-C"))
     # For decoder training, we only need clean images, so corruption type doesn't matter much
     # provided we just use the 'clean' output from dataset.
-    parser.add_argument("--corruption", type=str, default="fog") 
+    parser.add_argument("--corruption", type=str, default="origin") 
     parser.add_argument("--epochs", type=int, default=20)
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--lr-scheduler", type=str, default="cosine", choices=["none", "cosine", "step", "plateau"])
+    parser.add_argument("--lr-min", type=float, default=0.0)
+    parser.add_argument("--lr-step-size", type=int, default=30)
+    parser.add_argument("--lr-gamma", type=float, default=0.1)
+    parser.add_argument("--lr-patience", type=int, default=5)
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--save-dir", type=str, default=str(CURRENT_DIR / "checkpoints"))
     parser.add_argument("--print-every", type=int, default=10)
     parser.add_argument("--lambda-perc", type=float, default=0.1)
+    parser.add_argument("--resume", type=str, default=None)
     return parser.parse_args()
 
 def get_transforms():
@@ -88,8 +94,41 @@ def main():
     
     # 4. Training Loop
     best_val_loss = float('inf')
+    start_epoch = 1
+    resume_ckpt = None
+    if args.resume and os.path.exists(args.resume):
+        ckpt = torch.load(args.resume, map_location=device)
+        resume_ckpt = ckpt if isinstance(ckpt, dict) else None
+        if isinstance(ckpt, dict) and ("model_state_dict" in ckpt or "optimizer_state_dict" in ckpt):
+            if "model_state_dict" in ckpt:
+                decoder.load_state_dict(ckpt["model_state_dict"])
+            if "optimizer_state_dict" in ckpt:
+                optimizer.load_state_dict(ckpt["optimizer_state_dict"])
+            if "epoch" in ckpt:
+                start_epoch = int(ckpt["epoch"]) + 1
+            if "best_val_loss" in ckpt:
+                best_val_loss = float(ckpt["best_val_loss"])
+        else:
+            decoder.load_state_dict(ckpt)
+        print(f"[INFO] Resumed from {args.resume} (start_epoch={start_epoch}, best_val_loss={best_val_loss:.6f})")
     
-    for epoch in range(1, args.epochs + 1):
+    if start_epoch >= 0:
+        for group in optimizer.param_groups:
+            if "initial_lr" not in group:
+                group["initial_lr"] = group["lr"]
+
+    scheduler = None
+    if args.lr_scheduler == "cosine":
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=args.lr_min, last_epoch=start_epoch - 1)
+    elif args.lr_scheduler == "step":
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.lr_step_size, gamma=args.lr_gamma, last_epoch=start_epoch - 1)
+    elif args.lr_scheduler == "plateau":
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=args.lr_gamma, patience=args.lr_patience)
+    
+    if scheduler is not None and resume_ckpt is not None and "scheduler_state_dict" in resume_ckpt and resume_ckpt["scheduler_state_dict"] is not None:
+        scheduler.load_state_dict(resume_ckpt["scheduler_state_dict"])
+    
+    for epoch in range(start_epoch, args.epochs + 1):
         decoder.train()
         epoch_loss = 0.0
         start_time = time.time()
@@ -151,6 +190,12 @@ def main():
         val_loss /= len(val_loader)
         print(f"[Epoch {epoch}] Val Loss: {val_loss:.6f}")
         
+        if scheduler is not None:
+            if args.lr_scheduler == "plateau":
+                scheduler.step(val_loss)
+            else:
+                scheduler.step()
+        
         # Save Best
         if val_loss < best_val_loss:
             best_val_loss = val_loss
@@ -159,6 +204,16 @@ def main():
             
         # Save Last
         torch.save(decoder.state_dict(), os.path.join(args.save_dir, "feature_decoder_last.pth"))
+        torch.save(
+            {
+                "epoch": epoch,
+                "model_state_dict": decoder.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "scheduler_state_dict": scheduler.state_dict() if scheduler is not None else None,
+                "best_val_loss": best_val_loss,
+            },
+            os.path.join(args.save_dir, "feature_decoder_last_full.pth"),
+        )
 
 if __name__ == "__main__":
     main()

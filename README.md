@@ -63,6 +63,7 @@ pip install causal_conv1d==1.6.0
 # 3. 源码编译安装 mamba_ssm (禁用构建隔离和二进制包)
 pip install mamba_ssm==2.3.0 --no-binary mamba_ssm --no-build-isolation
 ```
+<!-- 可使用`scripts/check_env.py`进行环境检查 -->
 
 ### 3. 准备 Restormer
 请在项目根目录下克隆官方仓库：
@@ -133,31 +134,6 @@ Task 1 (Restormer) 需要加载预训练的去模糊模型权重。由于文件�
     ```
     *   `--save-json`: **(必须)** 将详细结果保存为 JSON 文件，用于后续 Task 3 的对比分析。
     *   `--corruption all`: 将自动遍历所有预定义的降质类型。
-
-### 4. 可选评估 (CUB-C)
-以下评估脚本不属于课程硬性要求，可用于补充分析或自检。
-
-*   **PSNR/SSIM**：
-    ```bash
-    python task1/eval_task1_cubc_psnr.py \
-      --data-root data/CUB-C \
-      --corruption all \
-      --split test \
-      --ckpt task1/checkpoints/restormer_best.pth \
-      --batch-size 4 \
-      --num-workers 4
-    ```
-
-*   **VGG16 分类**：
-    ```bash
-    python task1/eval_task1_cubc_vgg16.py \
-      --data-root data/CUB-C \
-      --corruption all \
-      --split test \
-      --ckpt task1/checkpoints/restormer_best.pth \
-      --batch-size 16 \
-      --num-workers 4
-    ```
 
 ## 实验二：特征增强 (Task 2)
 

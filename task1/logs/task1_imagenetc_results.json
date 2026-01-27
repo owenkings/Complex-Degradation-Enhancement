@@ -1,0 +1,51 @@
+{
+  "dataset": "ImageNet-C",
+  "ckpt": "/task1/checkpoints/restormer_best.pth",
+  "results": [
+    {
+      "corruption": "fog",
+      "severity": "flat",
+      "top1_degraded": 0.34108,
+      "top1_restored": 0.53686,
+      "delta_top1": 0.19578,
+      "psnr": 21.49060253183188,
+      "ssim": 0.8411566901016235
+    },
+    {
+      "corruption": "contrast",
+      "severity": "flat",
+      "top1_degraded": 0.27076,
+      "top1_restored": 0.47092,
+      "delta_top1": 0.20016,
+      "psnr": 28.631555673860255,
+      "ssim": 0.876386487827301
+    },
+    {
+      "corruption": "brightness",
+      "severity": "flat",
+      "top1_degraded": 0.57424,
+      "top1_restored": 0.61564,
+      "delta_top1": 0.04139999999999999,
+      "psnr": 26.79254652533967,
+      "ssim": 0.8943585883331299
+    },
+    {
+      "corruption": "motion_blur",
+      "severity": "flat",
+      "top1_degraded": 0.2597,
+      "top1_restored": 0.4913,
+      "delta_top1": 0.23160000000000003,
+      "psnr": 31.16074461864847,
+      "ssim": 0.8917354863166809
+    },
+    {
+      "corruption": "snow",
+      "severity": "flat",
+      "top1_degraded": 0.2226,
+      "top1_restored": 0.52656,
+      "delta_top1": 0.30396,
+      "psnr": 26.69542150476409,
+      "ssim": 0.8512014374351502
+    }
+  ]
+}
