@@ -153,10 +153,11 @@ Task 1 (Restormer) 需要加载预训练的去模糊模型权重。由于文件�
       --save-dir task2/checkpoints \
       --alpha-kl 0.1 \
       --temperature 2.0 \
-      --beta-ce 0.0
+      --beta-ce 0.0 \
+      --val-corruption "fog,contrast,brightness,motion_blur,snow"
     ```
     *   注意：Task 2 强制使用 Mamba 架构，代码中已锁定 backend。
-    *   训练日志：`task2/checkpoints/train_log.csv` 记录 MSE/KL/(CE)/Total。
+    *   训练日志：`task2/checkpoints/train_log.csv` 记录 val_mse、val_total_loss、val_top1、val_top5。
 
 ### 2. 评估 (Evaluation)
 在 ImageNet-C 上评估特征增强后的分类准确率。
@@ -167,13 +168,14 @@ Task 1 (Restormer) 需要加载预训练的去模糊模型权重。由于文件�
       --data-root data/ImageNet-C \
       --dataset-type imagenet-c \
       --synset-mapping data/ImageNet-C/synset_mapping.txt \
-      --enhancer-path task2/checkpoints/mamba_enhancer_best.pth \
+      --enhancer-path task2/checkpoints/mamba_enhancer_best_top1.pth \
       --corruption "all" \
       --severity "flat" \
       --batch-size 64 \
       --num-workers 8
     ```
     *   **结果保存**：脚本会自动将评估结果保存至 `task2/logs/task2_imagenetc_results.json`，供后续对比分析使用。
+    *   **推荐权重**：best_acc = `task2/checkpoints/mamba_enhancer_best_top1.pth`。
 
 ## 实验三：基于VGG浅层表征空间的图像增强 (Task 3)
 
@@ -204,7 +206,7 @@ Task 1 (Restormer) 需要加载预训练的去模糊模型权重。由于文件�
       --data-root data/ImageNet-C \
       --dataset-type imagenet-c \
       --synset-mapping data/ImageNet-C/synset_mapping.txt \
-      --enhancer-ckpt task2/checkpoints/mamba_enhancer_best.pth \
+      --enhancer-ckpt task2/checkpoints/mamba_enhancer_best_top1.pth \
       --decoder-ckpt task3/checkpoints/feature_decoder_best.pth \
       --output-dir task3/results \
       --corruption "all" \

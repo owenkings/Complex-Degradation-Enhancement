@@ -24,7 +24,8 @@ from task2.vgg_feature_wrapper import VGG16FeatureWrapper
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-root", type=str, default=str(PROJECT_ROOT / "data" / "CUB-C"))
-    parser.add_argument("--corruption", type=str, default="all") # Train on all corruptions
+    parser.add_argument("--corruption", type=str, default="all")
+    parser.add_argument("--val-corruption", type=str, default="fog,contrast,brightness,motion_blur,snow")
     parser.add_argument("--backend", type=str, default="mamba", choices=["mamba"], help="Backend used for training (Task 2 forces mamba)")
     parser.add_argument("--epochs", type=int, default=20)
     parser.add_argument("--batch-size", type=int, default=32)
@@ -42,6 +43,17 @@ def parse_args():
     parser.add_argument("--beta-ce", type=float, default=0.0)
     parser.add_argument("--resume", type=str, default=None)
     return parser.parse_args()
+
+def accuracy_from_logits(logits, labels, topk=(1,)):
+    maxk = max(topk)
+    _, pred = logits.topk(maxk, dim=1, largest=True, sorted=True)
+    pred = pred.t()
+    correct = pred.eq(labels.view(1, -1).expand_as(pred))
+    res = []
+    for k in topk:
+        correct_k = correct[:k].reshape(-1).float().sum(0, keepdim=False)
+        res.append(correct_k)
+    return res
 
 def get_transforms():
     # Standard ImageNet normalization: mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
@@ -75,7 +87,7 @@ def main():
     # For validation of Feature Regression, we can use test split of CUB-C
     val_ds = CubCTrainDataset(
         root=args.data_root,
-        corruption=args.corruption,
+        corruption=args.val_corruption,
         split="test",
         transform=transform
     )
@@ -102,6 +114,7 @@ def main():
     
     # 4. Training Loop
     best_val_loss = float('inf')
+    best_val_top1 = 0.0
     start_epoch = 1
     log_path = os.path.join(args.save_dir, "train_log.csv")
     log_exists = os.path.exists(log_path)
@@ -114,10 +127,12 @@ def main():
             "train_loss_kl",
             "train_loss_ce",
             "train_loss_total",
-            "val_loss_mse",
+            "val_mse",
             "val_loss_kl",
             "val_loss_ce",
-            "val_loss_total"
+            "val_total_loss",
+            "val_top1",
+            "val_top5"
         ])
     
     resume_ckpt = None
@@ -133,9 +148,11 @@ def main():
                 start_epoch = int(ckpt["epoch"]) + 1
             if "best_val_loss" in ckpt:
                 best_val_loss = float(ckpt["best_val_loss"])
+            if "best_val_top1" in ckpt:
+                best_val_top1 = float(ckpt["best_val_top1"])
         else:
             enhancer.load_state_dict(ckpt)
-        print(f"[INFO] Resumed from {args.resume} (start_epoch={start_epoch}, best_val_loss={best_val_loss:.6f})")
+        print(f"[INFO] Resumed from {args.resume} (start_epoch={start_epoch}, best_val_loss={best_val_loss:.6f}, best_val_top1={best_val_top1:.6f})")
 
     if start_epoch >= 0:
         for group in optimizer.param_groups:
@@ -225,6 +242,10 @@ def main():
         val_loss_kl = 0.0
         val_loss_ce = 0.0
         val_loss_total = 0.0
+        val_correct_top1 = 0.0
+        val_correct_top5 = 0.0
+        val_total = 0
+        val_sample_count = 0
         
         val_pbar = tqdm(val_loader, desc=f"Epoch {epoch}/{args.epochs} [Val]", leave=False, ncols=100)
         with torch.no_grad():
@@ -249,19 +270,31 @@ def main():
                     loss_ce = torch.zeros((), device=device)
                 loss = loss_mse + args.alpha_kl * loss_kl + args.beta_ce * loss_ce
                 
-                val_loss_mse += loss_mse.item()
-                val_loss_kl += loss_kl.item()
-                val_loss_ce += loss_ce.item()
-                val_loss_total += loss.item()
+                batch_size = labels.size(0)
+                val_loss_mse += loss_mse.item() * batch_size
+                val_loss_kl += loss_kl.item() * batch_size
+                val_loss_ce += loss_ce.item() * batch_size
+                val_loss_total += loss.item() * batch_size
+                val_sample_count += batch_size
+
+                pseudo = logits_clean.argmax(dim=1)
+                num_classes = logits_enh.size(1)
+                top5_k = 5 if num_classes >= 5 else num_classes
+                accs = accuracy_from_logits(logits_enh, pseudo, topk=(1, top5_k))
+                val_correct_top1 += float(accs[0].item())
+                val_correct_top5 += float(accs[1].item())
+                val_total += int(pseudo.size(0))
         
-        num_val_batches = len(val_loader)
-        val_loss_mse /= num_val_batches
-        val_loss_kl /= num_val_batches
-        val_loss_ce /= num_val_batches
-        val_loss_total /= num_val_batches
+        val_loss_mse /= max(val_sample_count, 1)
+        val_loss_kl /= max(val_sample_count, 1)
+        val_loss_ce /= max(val_sample_count, 1)
+        val_loss_total /= max(val_sample_count, 1)
+        val_top1 = val_correct_top1 / max(val_total, 1)
+        val_top5 = val_correct_top5 / max(val_total, 1)
         print(
             f"[Epoch {epoch}] Val Loss: {val_loss_total:.6f} "
-            f"(MSE: {val_loss_mse:.6f}, KL: {val_loss_kl:.6f}, CE: {val_loss_ce:.6f})"
+            f"(MSE: {val_loss_mse:.6f}, KL: {val_loss_kl:.6f}, CE: {val_loss_ce:.6f}) "
+            f"Top1: {val_top1:.4f}, Top5: {val_top5:.4f}"
         )
         
         if scheduler is not None:
@@ -279,14 +312,21 @@ def main():
             f"{val_loss_mse:.6f}",
             f"{val_loss_kl:.6f}",
             f"{val_loss_ce:.6f}",
-            f"{val_loss_total:.6f}"
+            f"{val_loss_total:.6f}",
+            f"{val_top1:.6f}",
+            f"{val_top5:.6f}"
         ])
         log_file.flush()
         
+        if val_top1 > best_val_top1:
+            best_val_top1 = val_top1
+            torch.save(enhancer.state_dict(), os.path.join(args.save_dir, "mamba_enhancer_best_top1.pth"))
+            print(f"  Saved best top1 model to {args.save_dir}/mamba_enhancer_best_top1.pth")
+        
         if val_loss_total < best_val_loss:
             best_val_loss = val_loss_total
-            torch.save(enhancer.state_dict(), os.path.join(args.save_dir, "mamba_enhancer_best.pth"))
-            print(f"  Saved best model to {args.save_dir}/mamba_enhancer_best.pth")
+            torch.save(enhancer.state_dict(), os.path.join(args.save_dir, "mamba_enhancer_best_loss.pth"))
+            print(f"  Saved best loss model to {args.save_dir}/mamba_enhancer_best_loss.pth")
 
         torch.save(enhancer.state_dict(), os.path.join(args.save_dir, "mamba_enhancer_last.pth"))
         torch.save(
@@ -296,6 +336,7 @@ def main():
                 "optimizer_state_dict": optimizer.state_dict(),
                 "scheduler_state_dict": scheduler.state_dict() if scheduler is not None else None,
                 "best_val_loss": best_val_loss,
+                "best_val_top1": best_val_top1,
             },
             os.path.join(args.save_dir, "mamba_enhancer_last_full.pth"),
         )
