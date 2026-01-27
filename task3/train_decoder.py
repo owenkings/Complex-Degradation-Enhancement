@@ -16,6 +16,7 @@ sys.path.append(str(PROJECT_ROOT))
 
 from utils.seed_utils import set_global_seed
 from utils.dataset import CubCTrainDataset
+from utils.metrics import batch_psnr_ssim
 from task2.vgg_feature_wrapper import VGG16FeatureWrapper
 from task3.decoder import FeatureDecoder
 from task3.perceptual import VGGPerceptual
@@ -49,6 +50,11 @@ def get_transforms():
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
+
+def denormalize(tensor):
+    mean = torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1).to(tensor.device)
+    std = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1).to(tensor.device)
+    return tensor * std + mean
 
 def main():
     args = parse_args()
@@ -94,6 +100,7 @@ def main():
     
     # 4. Training Loop
     best_val_loss = float('inf')
+    best_val_psnr = 0.0
     start_epoch = 1
     resume_ckpt = None
     if args.resume and os.path.exists(args.resume):
@@ -108,6 +115,8 @@ def main():
                 start_epoch = int(ckpt["epoch"]) + 1
             if "best_val_loss" in ckpt:
                 best_val_loss = float(ckpt["best_val_loss"])
+            if "best_val_psnr" in ckpt:
+                best_val_psnr = float(ckpt["best_val_psnr"])
         else:
             decoder.load_state_dict(ckpt)
         print(f"[INFO] Resumed from {args.resume} (start_epoch={start_epoch}, best_val_loss={best_val_loss:.6f})")
@@ -173,6 +182,9 @@ def main():
         # Validation
         decoder.eval()
         val_loss = 0.0
+        total_psnr = 0.0
+        total_ssim = 0.0
+        val_count = 0
         val_pbar = tqdm(val_loader, desc=f"Epoch {epoch}/{args.epochs} [Val]", leave=False, ncols=100)
         with torch.no_grad():
             for _, clean, _ in val_pbar:
@@ -186,9 +198,21 @@ def main():
                 loss_perc = perceptual(rec_img, clean)
                 loss = loss_l1 + args.lambda_perc * loss_perc
                 val_loss += loss.item()
+
+                rec_img_denorm = denormalize(rec_img)
+                clean_denorm = denormalize(clean)
+                rec_img_denorm = torch.clamp(rec_img_denorm, 0, 1)
+                clean_denorm = torch.clamp(clean_denorm, 0, 1)
+                batch_psnr, batch_ssim = batch_psnr_ssim(clean_denorm, rec_img_denorm)
+                batch_len = clean.size(0)
+                total_psnr += batch_psnr * batch_len
+                total_ssim += batch_ssim * batch_len
+                val_count += batch_len
         
         val_loss /= len(val_loader)
-        print(f"[Epoch {epoch}] Val Loss: {val_loss:.6f}")
+        avg_psnr = total_psnr / max(val_count, 1)
+        avg_ssim = total_ssim / max(val_count, 1)
+        print(f"[Epoch {epoch}] Val Loss: {val_loss:.6f}, PSNR: {avg_psnr:.2f}, SSIM: {avg_ssim:.4f}")
         
         if scheduler is not None:
             if args.lr_scheduler == "plateau":
@@ -201,6 +225,11 @@ def main():
             best_val_loss = val_loss
             torch.save(decoder.state_dict(), os.path.join(args.save_dir, "feature_decoder_best.pth"))
             print(f"  Saved best model to {args.save_dir}/feature_decoder_best.pth")
+        
+        if avg_psnr > best_val_psnr:
+            best_val_psnr = avg_psnr
+            torch.save(decoder.state_dict(), os.path.join(args.save_dir, "feature_decoder_best_psnr.pth"))
+            print(f"  Saved best PSNR model to {args.save_dir}/feature_decoder_best_psnr.pth")
             
         # Save Last
         torch.save(decoder.state_dict(), os.path.join(args.save_dir, "feature_decoder_last.pth"))
@@ -211,6 +240,7 @@ def main():
                 "optimizer_state_dict": optimizer.state_dict(),
                 "scheduler_state_dict": scheduler.state_dict() if scheduler is not None else None,
                 "best_val_loss": best_val_loss,
+                "best_val_psnr": best_val_psnr,
             },
             os.path.join(args.save_dir, "feature_decoder_last_full.pth"),
         )
