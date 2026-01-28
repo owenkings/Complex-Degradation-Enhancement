@@ -317,6 +317,30 @@ def main():
                 f"delta={top1_restored - top1_base:.4f} | "
                 f"PSNR={avg_psnr:.4f}, SSIM={avg_ssim:.4f}"
             )
+            if args.top5:
+                print(
+                    f"Top-1 Accuracy: {top1_restored:.6f} | Top-5 Accuracy: {top5_restored:.6f}"
+                )
+            else:
+                print(
+                    f"Top-1 Accuracy: {top1_restored:.6f} | Top-5 Accuracy: N/A"
+                )
+
+    summary = {}
+    if results:
+        summary = {
+            "avg_top1_degraded": float(sum(r["top1_degraded"] for r in results) / len(results)),
+            "avg_top1_restored": float(sum(r["top1_restored"] for r in results) / len(results)),
+            "avg_delta_top1": float(sum(r["delta_top1"] for r in results) / len(results)),
+            "avg_psnr": float(sum(r["psnr"] for r in results) / len(results)),
+            "avg_ssim": float(sum(r["ssim"] for r in results) / len(results)),
+        }
+        if args.top5:
+            summary.update({
+                "avg_top5_degraded": float(sum(r["top5_degraded"] for r in results) / len(results)),
+                "avg_top5_restored": float(sum(r["top5_restored"] for r in results) / len(results)),
+                "avg_delta_top5": float(sum(r["delta_top5"] for r in results) / len(results)),
+            })
 
     save_path = Path(args.save_json) if args.save_json else None
     if save_path:
@@ -325,6 +349,7 @@ def main():
             "dataset": "ImageNet-C",
             "ckpt": str(Path(args.ckpt).resolve()),
             "results": results,
+            "summary": summary,
         }
         with open(save_path, "w") as f:
             json.dump(payload, f, indent=2)

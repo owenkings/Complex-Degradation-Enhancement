@@ -13,7 +13,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Compare Task 1 (Restormer) and Task 2 (Feature Enhancement) results")
     parser.add_argument("--task1-json", type=str, default=str(PROJECT_ROOT / "task1" / "logs" / "task1_imagenetc_results.json"))
     parser.add_argument("--task2-json", type=str, default=str(PROJECT_ROOT / "task2" / "logs" / "task2_imagenetc_results.json"))
-    parser.add_argument("--output-dir", type=str, default=str(PROJECT_ROOT / "task3" / "comparison_results"))
+    parser.add_argument("--output-dir", "--out-dir", dest="output_dir", type=str, default=str(PROJECT_ROOT / "task3" / "comparison_results"))
     return parser.parse_args()
 
 def load_json(path):
@@ -46,9 +46,10 @@ def main():
                 "Corruption": item["corruption"],
                 "Severity": item["severity"],
                 "Top1 Accuracy": item["top1_restored"],
+                "Top5 Accuracy": item.get("top5_restored"),
                 "PSNR": item.get("psnr", 0),
                 "SSIM": item.get("ssim", 0),
-                "Baseline Accuracy": item["top1_degraded"] # Also record baseline
+                "Baseline Accuracy": item["top1_degraded"]
             })
 
     # Process Task 2 Data
@@ -67,6 +68,7 @@ def main():
                 "Corruption": item["corruption"],
                 "Severity": sev,
                 "Top1 Accuracy": item["accuracy"],
+                "Top5 Accuracy": item.get("top5"),
                 "PSNR": None, # Task 2 doesn't produce images
                 "SSIM": None,
                 "Baseline Accuracy": None # Assuming Task 1 covers baseline, or we could run baseline in Task 2
@@ -77,11 +79,22 @@ def main():
         return
 
     df = pd.DataFrame(records)
+    numeric_cols = ["Top1 Accuracy", "Top5 Accuracy", "PSNR", "SSIM", "Baseline Accuracy"]
     
     # Save CSV
     csv_path = output_dir / "comparison_summary.csv"
     df.to_csv(csv_path, index=False)
     print(f"[INFO] Summary saved to {csv_path}")
+    
+    df_avg = df.groupby(["Method", "Corruption"], as_index=False)[numeric_cols].mean(numeric_only=True)
+    df_avg["Severity"] = None
+    df_overall = df.groupby(["Method"], as_index=False)[numeric_cols].mean(numeric_only=True)
+    df_overall["Corruption"] = "all"
+    df_overall["Severity"] = None
+    summary_df = pd.concat([df_avg, df_overall], ignore_index=True)
+    summary_path = output_dir / "comparison_summary_avg.csv"
+    summary_df.to_csv(summary_path, index=False)
+    print(f"[INFO] Summary (avg) saved to {summary_path}")
 
     # Plotting
     # 1. Accuracy Comparison by Corruption (Average over severities)
@@ -91,7 +104,7 @@ def main():
         pass
 
     plt.figure(figsize=(12, 6))
-    sns.barplot(data=df, x="Corruption", y="Top1 Accuracy", hue="Method")
+    sns.barplot(data=df_avg, x="Corruption", y="Top1 Accuracy", hue="Method")
     plt.title("Top-1 Accuracy Comparison: Task 1 vs Task 2")
     plt.xticks(rotation=45)
     plt.tight_layout()

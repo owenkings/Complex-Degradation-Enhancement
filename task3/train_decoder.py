@@ -2,6 +2,7 @@ import os
 import sys
 import argparse
 import time
+import csv
 from pathlib import Path
 from tqdm import tqdm
 import torch
@@ -56,6 +57,17 @@ def denormalize(tensor):
     std = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1).to(tensor.device)
     return tensor * std + mean
 
+def accuracy_from_logits(logits, labels, topk=(1,)):
+    maxk = max(topk)
+    _, pred = logits.topk(maxk, dim=1, largest=True, sorted=True)
+    pred = pred.t()
+    correct = pred.eq(labels.view(1, -1).expand_as(pred))
+    res = []
+    for k in topk:
+        correct_k = correct[:k].reshape(-1).float().sum(0, keepdim=False)
+        res.append(correct_k)
+    return res
+
 def main():
     args = parse_args()
     set_global_seed(2025)
@@ -97,6 +109,22 @@ def main():
     perceptual = VGGPerceptual(layer="relu2_2").to(device)
     
     os.makedirs(args.save_dir, exist_ok=True)
+    log_path = Path(args.save_dir) / "train_log.csv"
+    log_exists = log_path.exists()
+    log_file = open(log_path, "a", newline="")
+    log_writer = csv.writer(log_file)
+    if not log_exists:
+        log_writer.writerow([
+            "epoch",
+            "train_loss",
+            "val_loss",
+            "val_top1",
+            "val_top5",
+            "lr",
+            "epoch_time_sec"
+        ])
+        log_file.flush()
+    print(f"[INFO] Training log saved to {log_path}")
     
     # 4. Training Loop
     best_val_loss = float('inf')
@@ -177,13 +205,17 @@ def main():
                 # )
                 
         epoch_loss /= len(train_loader)
-        print(f"[Epoch {epoch}] Train Loss: {epoch_loss:.6f}, Time: {time.time() - start_time:.2f}s")
+        epoch_time_sec = time.time() - start_time
+        print(f"[Epoch {epoch}] Train Loss: {epoch_loss:.6f}, Time: {epoch_time_sec:.2f}s")
         
         # Validation
         decoder.eval()
         val_loss = 0.0
         total_psnr = 0.0
         total_ssim = 0.0
+        val_correct_top1 = 0.0
+        val_correct_top5 = 0.0
+        val_total = 0
         val_count = 0
         val_pbar = tqdm(val_loader, desc=f"Epoch {epoch}/{args.epochs} [Val]", leave=False, ncols=100)
         with torch.no_grad():
@@ -208,17 +240,43 @@ def main():
                 total_psnr += batch_psnr * batch_len
                 total_ssim += batch_ssim * batch_len
                 val_count += batch_len
+
+                logits_clean = vgg(clean)
+                logits_rec = vgg(rec_img)
+                pseudo = logits_clean.argmax(dim=1)
+                num_classes = logits_rec.size(1)
+                top5_k = 5 if num_classes >= 5 else num_classes
+                accs = accuracy_from_logits(logits_rec, pseudo, topk=(1, top5_k))
+                val_correct_top1 += float(accs[0].item())
+                val_correct_top5 += float(accs[1].item())
+                val_total += int(pseudo.size(0))
         
         val_loss /= len(val_loader)
         avg_psnr = total_psnr / max(val_count, 1)
         avg_ssim = total_ssim / max(val_count, 1)
-        print(f"[Epoch {epoch}] Val Loss: {val_loss:.6f}, PSNR: {avg_psnr:.2f}, SSIM: {avg_ssim:.4f}")
+        val_top1 = val_correct_top1 / max(val_total, 1)
+        val_top5 = val_correct_top5 / max(val_total, 1)
+        print(
+            f"[Epoch {epoch}] Val Loss: {val_loss:.6f}, PSNR: {avg_psnr:.2f}, SSIM: {avg_ssim:.4f} "
+            f"Top-1 Accuracy: {val_top1:.4f} | Top-5 Accuracy: {val_top5:.4f}"
+        )
         
         if scheduler is not None:
             if args.lr_scheduler == "plateau":
                 scheduler.step(val_loss)
             else:
                 scheduler.step()
+        current_lr = optimizer.param_groups[0]["lr"]
+        log_writer.writerow([
+            epoch,
+            f"{epoch_loss:.6f}",
+            f"{val_loss:.6f}",
+            f"{val_top1:.6f}",
+            f"{val_top5:.6f}",
+            f"{current_lr:.8f}",
+            f"{epoch_time_sec:.2f}"
+        ])
+        log_file.flush()
         
         # Save Best
         if val_loss < best_val_loss:
@@ -244,6 +302,8 @@ def main():
             },
             os.path.join(args.save_dir, "feature_decoder_last_full.pth"),
         )
+    
+    log_file.close()
 
 if __name__ == "__main__":
     main()

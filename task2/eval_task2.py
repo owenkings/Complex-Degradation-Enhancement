@@ -273,6 +273,8 @@ def main():
             avg_top5 = total_top5 / count
             print(f"\n[Summary][{method_name}] Average Top-1: {avg_top1:.2%}, Average Top-5: {avg_top5:.2%}")
         else:
+            avg_top1 = 0.0
+            avg_top5 = 0.0
             print(f"\n[Summary][{method_name}] No evaluations performed.")
 
         save_path = Path(save_path)
@@ -282,7 +284,12 @@ def main():
             "dataset": "ImageNet-C" if args.dataset_type == "imagenet-c" else "CUB-C",
             "enhancer_path": str(Path(args.enhancer_path).resolve()) if method_name != "baseline" else "baseline",
             "method": method_name,
-            "results": results_list
+            "results": results_list,
+            "summary": {
+                "avg_top1": float(avg_top1),
+                "avg_top5": float(avg_top5),
+                "count": int(count)
+            }
         }
 
         with open(save_path, "w") as f:
