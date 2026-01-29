@@ -1,0 +1,35 @@
+(/data/conda-envs/coursedesign) szya800@szy:/dev/shm/course$ python task2/eval_task2.py \
+  --data-root data/ImageNet-C \
+  --dataset-type imagenet-c \
+  --synset-mapping data/ImageNet-C/synset_mapping.txt \
+  --enhancer-path task2/checkpoints/mamba_enhancer_best_top1.pth \
+  --corruption "all" \
+  --batch-size 32 \
+  --num-workers 8
+[INFO] Device: cuda
+[INFO] Loading Enhancer from task2/checkpoints/mamba_enhancer_best_top1.pth (Backend: mamba)
+[INFO] Running Baseline (No Enhancement)
+[Sanity Check] First 3 samples from brightness:
+  Path: ILSVRC2012_val_00000293.JPEG, WNID: n01440764, Mapped Label: 0
+  Path: ILSVRC2012_val_00002138.JPEG, WNID: n01440764, Mapped Label: 0
+  Path: ILSVRC2012_val_00003014.JPEG, WNID: n01440764, Mapped Label: 0
+[baseline][brightness] Top-1: 57.43%, Top-5: 80.52%                                                 
+[baseline][contrast] Top-1: 27.08%, Top-5: 45.67%                                                   
+[baseline][fog] Top-1: 34.11%, Top-5: 57.76%                                                        
+[baseline][motion_blur] Top-1: 25.97%, Top-5: 44.63%                                                
+[baseline][snow] Top-1: 22.26%, Top-5: 40.67%                                                       
+
+[Summary][baseline] Average Top-1: 33.37%, Average Top-5: 53.85%
+[INFO] Results saved to /dev/shm/course/task2/logs/task2_imagenetc_results_baseline.json
+[Sanity Check] First 3 samples from brightness:
+  Path: ILSVRC2012_val_00000293.JPEG, WNID: n01440764, Mapped Label: 0
+  Path: ILSVRC2012_val_00002138.JPEG, WNID: n01440764, Mapped Label: 0
+  Path: ILSVRC2012_val_00003014.JPEG, WNID: n01440764, Mapped Label: 0
+[enhanced][brightness] Top-1: 61.78%, Top-5: 83.75%                                                 
+[enhanced][contrast] Top-1: 48.37%, Top-5: 71.37%                                                   
+[enhanced][fog] Top-1: 54.72%, Top-5: 78.00%                                                        
+[enhanced][motion_blur] Top-1: 46.12%, Top-5: 70.80%                                                
+[enhanced][snow] Top-1: 48.35%, Top-5: 72.44%                                                       
+
+[Summary][enhanced] Average Top-1: 51.87%, Average Top-5: 75.27%
+[INFO] Results saved to /dev/shm/course/task2/logs/task2_imagenetc_results.json

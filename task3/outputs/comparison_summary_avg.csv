@@ -1,0 +1,13 @@
+Method,Corruption,Top1 Accuracy,Top5 Accuracy,PSNR,SSIM,Baseline Accuracy,Severity
+Task1 (Image Enhancement),brightness,0.61576,0.83648,26.792497748779933,0.8943605779075623,0.57426,
+Task1 (Image Enhancement),contrast,0.47088,0.71316,28.63158579049285,0.8763842946815491,0.27076,
+Task1 (Image Enhancement),fog,0.53686,0.77848,21.490597696156044,0.8411580498886109,0.3411,
+Task1 (Image Enhancement),motion_blur,0.49128,0.74516,31.160872455474536,0.8917363581848144,0.25968,
+Task1 (Image Enhancement),snow,0.52654,0.76536,26.695734289966243,0.8512052851486206,0.2226,
+Task2 (Feature Enhancement),brightness,0.6178,0.83748,,,,
+Task2 (Feature Enhancement),contrast,0.48372,0.71372,,,,
+Task2 (Feature Enhancement),fog,0.54724,0.77996,,,,
+Task2 (Feature Enhancement),motion_blur,0.46118,0.70796,,,,
+Task2 (Feature Enhancement),snow,0.48352,0.72436,,,,
+Task1 (Image Enhancement),all,0.528264,0.767728,26.95425759617392,0.8709689131622314,0.33368000000000003,
+Task2 (Feature Enhancement),all,0.5186919999999999,0.752696,,,,

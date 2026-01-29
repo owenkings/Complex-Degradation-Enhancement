@@ -1,0 +1,67 @@
+{
+  "dataset": "ImageNet-C",
+  "enhancer_path": "/dev/shm/course/task2/checkpoints/mamba_enhancer_best_top1.pth",
+  "method": "enhanced",
+  "results": [
+    {
+      "method": "enhanced",
+      "corruption": "brightness",
+      "severity": "flat",
+      "accuracy": 0.6178,
+      "top1": 0.6178,
+      "top5": 0.83748,
+      "correct_top1": 30890.0,
+      "correct_top5": 41874.0,
+      "total": 50000
+    },
+    {
+      "method": "enhanced",
+      "corruption": "contrast",
+      "severity": "flat",
+      "accuracy": 0.48372,
+      "top1": 0.48372,
+      "top5": 0.71372,
+      "correct_top1": 24186.0,
+      "correct_top5": 35686.0,
+      "total": 50000
+    },
+    {
+      "method": "enhanced",
+      "corruption": "fog",
+      "severity": "flat",
+      "accuracy": 0.54724,
+      "top1": 0.54724,
+      "top5": 0.77996,
+      "correct_top1": 27362.0,
+      "correct_top5": 38998.0,
+      "total": 50000
+    },
+    {
+      "method": "enhanced",
+      "corruption": "motion_blur",
+      "severity": "flat",
+      "accuracy": 0.46118,
+      "top1": 0.46118,
+      "top5": 0.70796,
+      "correct_top1": 23059.0,
+      "correct_top5": 35398.0,
+      "total": 50000
+    },
+    {
+      "method": "enhanced",
+      "corruption": "snow",
+      "severity": "flat",
+      "accuracy": 0.48352,
+      "top1": 0.48352,
+      "top5": 0.72436,
+      "correct_top1": 24176.0,
+      "correct_top5": 36218.0,
+      "total": 50000
+    }
+  ],
+  "summary": {
+    "avg_top1": 0.5186919999999999,
+    "avg_top5": 0.752696,
+    "count": 5
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "dataset": "ImageNet-C",
+  "enhancer_path": "baseline",
+  "method": "baseline",
+  "results": [
+    {
+      "method": "baseline",
+      "corruption": "brightness",
+      "severity": "flat",
+      "accuracy": 0.57426,
+      "top1": 0.57426,
+      "top5": 0.8052,
+      "correct_top1": 28713.0,
+      "correct_top5": 40260.0,
+      "total": 50000
+    },
+    {
+      "method": "baseline",
+      "corruption": "contrast",
+      "severity": "flat",
+      "accuracy": 0.27076,
+      "top1": 0.27076,
+      "top5": 0.45674,
+      "correct_top1": 13538.0,
+      "correct_top5": 22837.0,
+      "total": 50000
+    },
+    {
+      "method": "baseline",
+      "corruption": "fog",
+      "severity": "flat",
+      "accuracy": 0.3411,
+      "top1": 0.3411,
+      "top5": 0.57762,
+      "correct_top1": 17055.0,
+      "correct_top5": 28881.0,
+      "total": 50000
+    },
+    {
+      "method": "baseline",
+      "corruption": "motion_blur",
+      "severity": "flat",
+      "accuracy": 0.25968,
+      "top1": 0.25968,
+      "top5": 0.4463,
+      "correct_top1": 12984.0,
+      "correct_top5": 22315.0,
+      "total": 50000
+    },
+    {
+      "method": "baseline",
+      "corruption": "snow",
+      "severity": "flat",
+      "accuracy": 0.2226,
+      "top1": 0.2226,
+      "top5": 0.40668,
+      "correct_top1": 11130.0,
+      "correct_top5": 20334.0,
+      "total": 50000
+    }
+  ],
+  "summary": {
+    "avg_top1": 0.33368000000000003,
+    "avg_top5": 0.538508,
+    "count": 5
+  }
+}

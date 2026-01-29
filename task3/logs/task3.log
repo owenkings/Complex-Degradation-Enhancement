@@ -1,0 +1,82 @@
+(/data/conda-envs/coursedesign) szya800@szy:/dev/shm/course$ python task3/run_task3.py \
+  --data-root data/ImageNet-C \
+  --dataset-type imagenet-c \
+  --synset-mapping data/ImageNet-C/synset_mapping.txt \
+  --enhancer-ckpt task2/checkpoints/mamba_enhancer_best_top1.pth \
+  --decoder-ckpt task3/checkpoints/feature_decoder_best.pth \
+  --output-dir task3/results \
+  --corruption "all" \
+  --severity "flat" \
+  --batch-size 32 \
+  --num-workers 8 \
+  --save-results
+[INFO] Device: cuda
+[INFO] Loading models...
+[INFO] Loaded Enhancer from task2/checkpoints/mamba_enhancer_best_top1.pth
+[INFO] Loaded Decoder from task3/checkpoints/feature_decoder_best.pth
+[INFO] Running on corruptions: ['fog', 'snow', 'brightness', 'contrast', 'motion_blur']
+
+==================== Processing Corruption: fog ====================
+[INFO] Loading ImageNet-C dataset from data/ImageNet-C (Severity: flat)
+[INFO] Flat severity structure detected (no flat subdir in fog)
+[INFO] Test samples: 50000
+Run Task3 (fog):   0%|                                                     | 0/1563 [00:00<?, ?it/s]
+[DEBUG] Decoder Output Stats (First Batch): Min=-2.36, Max=3.08, Mean=0.17, Std=0.94
+[INFO] Decoder output in normalized range; applying denormalization.
+[INFO] Saved comparison to task3/results/comparison_imagenet-c_fog_sev-flat_N-all.png
+                                                                                                    
+[Results] Corruption: fog
+Average PSNR: 17.93
+Average SSIM: 0.7820
+
+==================== Processing Corruption: snow ====================
+[INFO] Loading ImageNet-C dataset from data/ImageNet-C (Severity: flat)
+[INFO] Flat severity structure detected (no flat subdir in snow)
+[INFO] Test samples: 50000
+Run Task3 (snow):   0%|                                                    | 0/1563 [00:00<?, ?it/s]
+[DEBUG] Decoder Output Stats (First Batch): Min=-2.07, Max=2.55, Mean=0.16, Std=1.13
+[INFO] Decoder output in normalized range; applying denormalization.
+[INFO] Saved comparison to task3/results/comparison_imagenet-c_snow_sev-flat_N-all.png
+                                                                                                    
+[Results] Corruption: snow
+Average PSNR: 22.41
+Average SSIM: 0.7672
+
+==================== Processing Corruption: brightness ====================
+[INFO] Loading ImageNet-C dataset from data/ImageNet-C (Severity: flat)
+[INFO] Flat severity structure detected (no flat subdir in brightness)
+[INFO] Test samples: 50000
+Run Task3 (brightness):   0%|                                              | 0/1563 [00:00<?, ?it/s]
+[DEBUG] Decoder Output Stats (First Batch): Min=-2.43, Max=3.37, Mean=0.12, Std=1.13
+[INFO] Decoder output in normalized range; applying denormalization.
+[INFO] Saved comparison to task3/results/comparison_imagenet-c_brightness_sev-flat_N-all.png
+                                                                                                    
+[Results] Corruption: brightness
+Average PSNR: 22.83
+Average SSIM: 0.8529
+
+==================== Processing Corruption: contrast ====================
+[INFO] Loading ImageNet-C dataset from data/ImageNet-C (Severity: flat)
+[INFO] Flat severity structure detected (no flat subdir in contrast)
+[INFO] Test samples: 50000
+Run Task3 (contrast):   0%|                                                | 0/1563 [00:00<?, ?it/s]
+[DEBUG] Decoder Output Stats (First Batch): Min=-2.26, Max=2.98, Mean=0.19, Std=1.02
+[INFO] Decoder output in normalized range; applying denormalization.
+[INFO] Saved comparison to task3/results/comparison_imagenet-c_contrast_sev-flat_N-all.png
+                                                                                                    
+[Results] Corruption: contrast
+Average PSNR: 19.97
+Average SSIM: 0.7953
+
+==================== Processing Corruption: motion_blur ====================
+[INFO] Loading ImageNet-C dataset from data/ImageNet-C (Severity: flat)
+[INFO] Flat severity structure detected (no flat subdir in motion_blur)
+[INFO] Test samples: 50000
+Run Task3 (motion_blur):   0%|                                             | 0/1563 [00:00<?, ?it/s]
+[DEBUG] Decoder Output Stats (First Batch): Min=-2.19, Max=2.81, Mean=0.15, Std=1.08
+[INFO] Decoder output in normalized range; applying denormalization.
+[INFO] Saved comparison to task3/results/comparison_imagenet-c_motion_blur_sev-flat_N-all.png
+                                                                                                    
+[Results] Corruption: motion_blur
+Average PSNR: 23.92
+Average SSIM: 0.7938

@@ -1,51 +1,76 @@
 {
   "dataset": "ImageNet-C",
-  "ckpt": "/task1/checkpoints/restormer_best.pth",
+  "ckpt": "/dev/shm/course/task1/checkpoints/restormer_best.pth",
   "results": [
     {
       "corruption": "fog",
       "severity": "flat",
-      "top1_degraded": 0.34108,
+      "top1_degraded": 0.3411,
       "top1_restored": 0.53686,
-      "delta_top1": 0.19578,
-      "psnr": 21.49060253183188,
-      "ssim": 0.8411566901016235
+      "delta_top1": 0.19576,
+      "psnr": 21.490597696156044,
+      "ssim": 0.8411580498886109,
+      "top5_degraded": 0.57762,
+      "top5_restored": 0.77848,
+      "delta_top5": 0.20085999999999993
     },
     {
       "corruption": "contrast",
       "severity": "flat",
       "top1_degraded": 0.27076,
-      "top1_restored": 0.47092,
-      "delta_top1": 0.20016,
-      "psnr": 28.631555673860255,
-      "ssim": 0.876386487827301
+      "top1_restored": 0.47088,
+      "delta_top1": 0.20012000000000002,
+      "psnr": 28.63158579049285,
+      "ssim": 0.8763842946815491,
+      "top5_degraded": 0.45674,
+      "top5_restored": 0.71316,
+      "delta_top5": 0.25642000000000004
     },
     {
       "corruption": "brightness",
       "severity": "flat",
-      "top1_degraded": 0.57424,
-      "top1_restored": 0.61564,
-      "delta_top1": 0.04139999999999999,
-      "psnr": 26.79254652533967,
-      "ssim": 0.8943585883331299
+      "top1_degraded": 0.57426,
+      "top1_restored": 0.61576,
+      "delta_top1": 0.04149999999999998,
+      "psnr": 26.792497748779933,
+      "ssim": 0.8943605779075623,
+      "top5_degraded": 0.8052,
+      "top5_restored": 0.83648,
+      "delta_top5": 0.031279999999999974
     },
     {
       "corruption": "motion_blur",
       "severity": "flat",
-      "top1_degraded": 0.2597,
-      "top1_restored": 0.4913,
-      "delta_top1": 0.23160000000000003,
-      "psnr": 31.16074461864847,
-      "ssim": 0.8917354863166809
+      "top1_degraded": 0.25968,
+      "top1_restored": 0.49128,
+      "delta_top1": 0.23159999999999997,
+      "psnr": 31.160872455474536,
+      "ssim": 0.8917363581848144,
+      "top5_degraded": 0.4463,
+      "top5_restored": 0.74516,
+      "delta_top5": 0.29886000000000007
     },
     {
       "corruption": "snow",
       "severity": "flat",
       "top1_degraded": 0.2226,
-      "top1_restored": 0.52656,
-      "delta_top1": 0.30396,
-      "psnr": 26.69542150476409,
-      "ssim": 0.8512014374351502
+      "top1_restored": 0.52654,
+      "delta_top1": 0.30394,
+      "psnr": 26.695734289966243,
+      "ssim": 0.8512052851486206,
+      "top5_degraded": 0.40668,
+      "top5_restored": 0.76536,
+      "delta_top5": 0.35868000000000005
     }
-  ]
+  ],
+  "summary": {
+    "avg_top1_degraded": 0.33368000000000003,
+    "avg_top1_restored": 0.5282640000000001,
+    "avg_delta_top1": 0.19458399999999998,
+    "avg_psnr": 26.95425759617392,
+    "avg_ssim": 0.8709689131622316,
+    "avg_top5_degraded": 0.538508,
+    "avg_top5_restored": 0.767728,
+    "avg_delta_top5": 0.22922000000000003
+  }
 }

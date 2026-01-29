@@ -20,6 +20,8 @@ Restormer/
 *.sh
 
 checkpoints_task1_restormer/
-*.log
+task1_train.log
+task2_train.log
+task3_train.log
 checkpoints/
 extra/
